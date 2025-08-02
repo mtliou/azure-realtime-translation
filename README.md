@@ -1,112 +1,169 @@
-# JavaScript Speech Recognition, Synthesis, and Translation Sample for the Web Browser
+# Azure Speech Translation Demos
 
-This sample demonstrates how to recognize, synthesize, and translate speech with the Speech SDK for JavaScript on a web browser, like Microsoft Edge, or Chrome.
-See [this article](https://docs.microsoft.com/azure/cognitive-services/speech-service/quickstart-js-browser) for introductory information on the Speech SDK for JavaScript.
+Real-time bilingual speech recognition and translation demos using Azure Cognitive Services Speech SDK.
+
+## Features
+
+- **Bilingual Speech Recognition**: Automatic detection of French Canadian and English speech
+- **Real-time Translation**: Simultaneous translation to 12+ languages with ultra-low latency
+- **Zero-Repetition TTS**: Advanced deduplication system ensures translations are spoken only once
+- **Session-Based Architecture**: Speaker/listener model with WebSocket communication
+- **Multiple Demo Implementations**: Progressive enhancements from basic to advanced features
 
 ## Prerequisites
 
-* A subscription key for the Speech service. See [Try the speech service for free](https://docs.microsoft.com/azure/cognitive-services/speech-service/get-started).
-* For intent recognition: an *endpoint* subscription key for the [Language Understanding Intelligent Service (LUIS)](https://www.luis.ai/home), and an application ID.
-* A PC or Mac, with a working speaker.
-* A text editor.
-* Ensure you have [Node.js](https://nodejs.org/en/download/) installed.
+* Azure Speech Service subscription key - [Try the speech service for free](https://docs.microsoft.com/azure/cognitive-services/speech-service/get-started)
+* Azure Translator Service subscription key (for translation features)
+* Node.js 14+ and npm
+* Modern web browser (Chrome, Firefox, Safari, Edge)
 
-## Build the sample
+## Quick Start
 
-* **By downloading the Microsoft Cognitive Services Speech SDK when building this sample, you acknowledge its license, see [Speech SDK license agreement](https://aka.ms/csspeech/license).**
-* [Download the sample code to your development PC.](/README.md#get-the-samples)
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/mtliou/azure-speech-translation-demos.git
+   cd azure-speech-translation-demos
+   ```
 
-If you want to host the sample on a web server, the web server must be able to run Node. Follow these steps:
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-* Edit the `.env` source:
-  * Replace the string `paste-your-speech-region-here` with the service region of your subscription.
-    For example, replace with `westus` if you are using the 30-day free trial subscription.
-  * Replace the string `paste-your-speech-key-here` with your own subscription key.
-* Edit the `index.html` source:
-  * Replace the value for the variable `authorizationEndpoint` with the full URL where you can access the Node server. By default, this is http://localhost:3001/api/get-speech-token
-* For synthesis, edit the `synthesis.html` source:
-  * Replace the value for the variable `authorizationEndpoint` with the full URL where you can access the Node server. By default, this is http://localhost:3001/api/get-speech-token
-* Deploy all files to your web server.
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Azure credentials
+   ```
 
-## How to run the sample
+4. **Start the servers**
+   ```bash
+   # Terminal 1: Express server for token exchange (port 3003)
+   npm run server
 
-* Clone this repo, then change directory to the project root and run `npm install` to install dependencies.
-* Add your Azure Speech key and region to the `.env` file, replacing the placeholder text.
-* To run the Express server, run `npm run server`.
+   # Terminal 2: Socket.io server for real-time communication (port 3000)
+   node server/websocket-server.js
 
-* In case you are running the sample from your local computer, open `public/index.html` or `public/synthesis.html` from the location where you have downloaded this sample with a JavaScript capable browser.
-  Use the input fields to set your subscription key and service region.
-* In case you are hosting the sample on a web server, open a web browser and navigate to the full URL where you host the sample.
+   # Terminal 3: HTTP server for static files (port 8080)
+   npm run http-server
+   ```
 
+5. **Access the demos**
+   - Translation Demos Index: http://localhost:8080/public/translation-demos.html
+   - Speaker (Bilingual): http://localhost:8080/public/speaker-bilingual-auto.html
+   - Listener (Zero Repetition): http://localhost:8080/public/listener-zero-repetition.html
 
-## Token exchange process
+## Key Components
 
-This sample application shows an example design pattern for retrieving and managing tokens, a common task when using the Speech JavaScript SDK in a browser environment. A simple Express back-end is implemented in the same project under `server/index.js`, which abstracts the token retrieval process. 
+### Speaker Interface (`speaker-bilingual-auto.html`)
+- Continuous bilingual speech recognition (French Canadian/English)
+- Real-time transcription display
+- Session code generation for listeners to join
+- WebSocket broadcasting of recognized speech
 
-The reason for this design is to prevent your speech key from being exposed on the front-end, since it can be used to make calls directly to your subscription. By using an ephemeral token, you are able to protect your speech key from being used directly. To get a token, you use the Speech REST API and make a call using your speech key and region. In the Express part of the app, this is implemented in `index.js` behind the endpoint `/api/get-speech-token`, which the front-end uses to get tokens. 
+### Listener Interface (`listener-zero-repetition.html`)
+- Joins speaker sessions via session code
+- Real-time translation to selected target language
+- Advanced deduplication system prevents TTS repetition
+- Support for 12+ target languages including:
+  - Arabic, Chinese (Simplified/Traditional), French, German
+  - Italian, Japanese, Korean, Portuguese, Russian, Spanish
 
-```javascript
-app.get('/api/get-speech-token', async (req, res, next) => {
-    res.setHeader('Content-Type', 'application/json');
-    const speechKey = process.env.SPEECH_KEY;
-    const speechRegion = process.env.SPEECH_REGION;
+### Zero-Repetition System
+The listener implements a sophisticated deduplication system:
+- **Content Fingerprinting**: Multiple hash types for robust duplicate detection
+- **State Machine**: Tracks translation chunk lifecycle
+- **Smart Buffering**: Configurable delays for stability
+- **Metrics Tracking**: Real-time statistics on deduplication effectiveness
 
-    if (speechKey === 'paste-your-speech-key-here' || speechRegion === 'paste-your-speech-region-here') {
-        res.status(400).send('You forgot to add your speech key or region to the .env file.');
-    } else {
-        const headers = { 
-            headers: {
-                'Ocp-Apim-Subscription-Key': speechKey,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-        };
+## Architecture
 
-        try {
-            const tokenResponse = await axios.post(`https://${speechRegion}.api.cognitive.microsoft.com/sts/v1.0/issueToken`, null, headers);
-            res.send({ token: tokenResponse.data, region: speechRegion });
-        } catch (err) {
-            res.status(401).send('There was an error authorizing your speech key.');
-        }
-    }
-});
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│     Speaker     │────▶│  Socket.io Server │────▶│    Listener     │
+│ (Bilingual STT) │     │   (Port 3000)    │     │ (Translation +  │
+└─────────────────┘     └──────────────────┘     │      TTS)       │
+         │                                        └─────────────────┘
+         │                                                 │
+         ▼                                                 ▼
+┌─────────────────┐                              ┌─────────────────┐
+│  Express Server │                              │ Azure Translator│
+│  (Port 3003)    │                              │      API        │
+│ Token Exchange  │                              └─────────────────┘
+└─────────────────┘
 ```
 
-In the request, you create a `Ocp-Apim-Subscription-Key` header, and pass your speech key as the value. Then you make a request to the **issueToken** endpoint for your region, and an authorization token is returned. In a production application, this endpoint returning the token should be *restricted by additional user authentication* whenever possible. 
+## Demo Files
 
-On the front-end, both `public/index.html` and `public/synthesis.html` contain code (using the axios library) to retrieve the token from the server. 
+### Core Demos
+- `speaker-bilingual-auto.html` - Bilingual speaker with auto language detection
+- `listener-zero-repetition.html` - Listener with zero-repetition TTS system
+- `listener-optimal-simultaneous.html` - Professional simultaneous translation
+- `test-zero-repetition.html` - Test page for deduplication system
 
-```javascript
-let authorizationEndpoint = "http://localhost:3001/api/get-speech-token";
+### Progressive Enhancement Demos
+- `listener-multilingual-enhanced.html` - Enhanced multilingual support
+- `listener-stable-translation.html` - Stability-focused implementation
+- `listener-simultaneous-incremental.html` - Incremental speech approach
 
-async function RequestAuthorizationToken() {
-  if (authorizationEndpoint) {
-    try {
-      const res = await axios.get(authorizationEndpoint);
-      const token = res.data.token;
-      const region = res.data.region;
-      regionOptions.value = region;
-      authorizationToken = token;
+## Token Exchange Security
 
-      console.log('Token fetched from back-end: ' + token);
-    } catch (err) {
-        console.log(err);
-    }
-  }
-}
+The application implements secure token exchange to protect Azure subscription keys:
+- Speech keys are stored server-side in environment variables
+- Express server exchanges keys for temporary tokens
+- Client-side code uses tokens instead of subscription keys
+- Tokens are ephemeral and time-limited
+
+## Development
+
+### Project Structure
+```
+├── server/
+│   ├── index.js              # Express server for token exchange
+│   ├── websocket-server.js   # Socket.io server for real-time comm
+│   └── translation-service.js # Azure Translator integration
+├── public/
+│   ├── speaker-*.html        # Speaker interfaces
+│   ├── listener-*.html       # Listener interfaces
+│   └── microsoft.*.js        # Speech SDK bundle
+├── .env                      # Environment variables (not in git)
+└── package.json              # Dependencies and scripts
 ```
 
-This code makes the call to `/api/get-speech-token` to fetch an new authorization. 
+### Key Technologies
+- Azure Cognitive Services Speech SDK
+- Azure Translator API
+- Socket.io for WebSocket communication
+- Express.js for token exchange
+- Vanilla JavaScript (no framework dependencies)
 
-```javascript
-let speechConfig;
-if (authorizationToken) {
-    speechConfig = sdkConfigType.fromAuthorizationToken(authorizationToken, regionOptions.value);
-} 
-```
+## Troubleshooting
 
-In many other Speech service samples, you will see the function `SpeechConfig.fromSubscription` used instead of `SpeechConfig.fromAuthorizationToken`, but by **avoiding the usage** of `fromSubscription` on the front-end, you prevent your speech subscription key from becoming exposed, and instead utilize the token authentication process. `fromSubscription` is safe to use in a Node.js environment, or in other Speech SDK programming languages when the call is made on a back-end, but it is best to avoid using in a browser-based JavaScript environment.
+1. **No audio from TTS**
+   - Check browser console for errors
+   - Ensure Azure Speech credentials are correct
+   - Verify target language is selected
 
-## References
+2. **Translation not working**
+   - Confirm Azure Translator credentials in `.env`
+   - Check WebSocket connection in browser console
+   - Verify session code matches between speaker/listener
 
-* [JavaScript quickstart article on the SDK documentation site](https://docs.microsoft.com/azure/cognitive-services/speech-service/quickstart-js-browser)
-* [Speech SDK API reference for JavaScript](https://aka.ms/csspeech/javascriptref)
+3. **Repetitive TTS playback**
+   - Use `listener-zero-repetition.html` for best results
+   - Enable debug mode to see deduplication in action
+   - Check the test page for deduplication effectiveness
+
+## License
+
+This project is licensed under the MIT License. See LICENSE file for details.
+
+## Acknowledgments
+
+Built with Microsoft Azure Cognitive Services:
+- [Speech SDK Documentation](https://docs.microsoft.com/azure/cognitive-services/speech-service/)
+- [Translator Documentation](https://docs.microsoft.com/azure/cognitive-services/translator/)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
