@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>No-Duplicate Translation Listener</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #1a1a1a;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #66bb6a;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .connection-panel {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .session-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .session-input input {
+            flex: 1;
+            padding: 12px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 18px;
+            font-family: monospace;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .language-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .lang-option {
+            padding: 12px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            border: 2px solid transparent;
+        }
+        .lang-option.active {
+            background: #66bb6a;
+            color: #000;
+            border-color: #4caf50;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #66bb6a;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button:hover:not(:disabled) {
+            background: #4caf50;
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: #2a2a2a;
+            border-radius: 20px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #888;
+        }
+        .status-dot.active {
+            background: #66bb6a;
+        }
+        .status-dot.speaking {
+            background: #4fc3d1;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .translation-display {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 400px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .translation-entry {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            border-left: 4px solid #66bb6a;
+        }
+        .translation-entry.pending {
+            opacity: 0.6;
+            border-left-color: #f59e0b;
+        }
+        .translation-entry.spoken {
+            border-left-color: #4fc3d1;
+            background: #1a2a2a;
+        }
+        .translation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .translation-lang {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            background: #2a2a2a;
+            border-radius: 20px;
+            font-size: 0.85em;
+        }
+        .translation-time {
+            font-size: 0.8em;
+            color: #666;
+        }
+        .translation-original {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+        .translation-text {
+            font-size: 1.1em;
+            line-height: 1.5;
+        }
+        .metrics-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .metric-box {
+            background: #242424;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #66bb6a;
+        }
+        .metric-label {
+            font-size: 0.8em;
+            color: #888;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        .error-message {
+            background: #f87171;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .success-message {
+            background: #66bb6a;
+            color: #1a472a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .settings-panel {
+            background: #242424;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+        .setting-label {
+            font-size: 0.9em;
+            color: #aaa;
+        }
+        .setting-value {
+            background: #1a1a1a;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            color: #66bb6a;
+        }
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            background: #2a2a2a;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .status-indicator.buffering {
+            background: #f59e0b;
+            color: #000;
+        }
+        .status-indicator.ready {
+            background: #10b981;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚫 No-Duplicate Translation Listener</h1>
+        <p class="subtitle">Smart Buffering • Natural Speech Pauses • Zero Repetition</p>
+        
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+        
+        <div class="settings-panel">
+            <h4 style="margin-top: 0; color: #66bb6a;">Smart Buffering Settings</h4>
+            <div class="setting-row">
+                <span class="setting-label">Silence detection:</span>
+                <span class="setting-value" id="silenceThreshold">2.0s</span>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Minimum phrase length:</span>
+                <span class="setting-value" id="minPhraseLength">5 words</span>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Buffer mode:</span>
+                <span class="setting-value">Smart Chunking</span>
+            </div>
+        </div>
+        
+        <div class="connection-panel">
+            <h3>Join Session</h3>
+            <div class="session-input">
+                <input type="text" id="sessionCode" placeholder="Enter session code (e.g., ABC1)" maxlength="4">
+            </div>
+            
+            <h4>Select Your Language</h4>
+            <div class="language-selector">
+                <div class="lang-option active" data-lang="en" onclick="selectLanguage(this)">
+                    🇺🇸 English
+                </div>
+                <div class="lang-option" data-lang="fr" onclick="selectLanguage(this)">
+                    🇫🇷 French
+                </div>
+                <div class="lang-option" data-lang="es" onclick="selectLanguage(this)">
+                    🇪🇸 Spanish
+                </div>
+                <div class="lang-option" data-lang="de" onclick="selectLanguage(this)">
+                    🇩🇪 German
+                </div>
+                <div class="lang-option" data-lang="it" onclick="selectLanguage(this)">
+                    🇮🇹 Italian
+                </div>
+                <div class="lang-option" data-lang="pt" onclick="selectLanguage(this)">
+                    🇧🇷 Portuguese
+                </div>
+                <div class="lang-option" data-lang="zh" onclick="selectLanguage(this)">
+                    🇨🇳 Chinese
+                </div>
+                <div class="lang-option" data-lang="ja" onclick="selectLanguage(this)">
+                    🇯🇵 Japanese
+                </div>
+                <div class="lang-option" data-lang="ko" onclick="selectLanguage(this)">
+                    🇰🇷 Korean
+                </div>
+                <div class="lang-option" data-lang="ar" onclick="selectLanguage(this)">
+                    🇸🇦 Arabic
+                </div>
+                <div class="lang-option" data-lang="ru" onclick="selectLanguage(this)">
+                    🇷🇺 Russian
+                </div>
+                <div class="lang-option" data-lang="hi" onclick="selectLanguage(this)">
+                    🇮🇳 Hindi
+                </div>
+            </div>
+            
+            <button id="joinBtn" onclick="joinSession()" style="margin-top: 20px;">Join Session</button>
+            <button id="leaveBtn" onclick="leaveSession()" style="display: none; margin-top: 20px;">Leave Session</button>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-dot" id="connectionDot"></div>
+                <span id="connectionStatus">Disconnected</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="receivingDot"></div>
+                <span id="receivingStatus">Not Receiving</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="speakingDot"></div>
+                <span id="speakingStatus">Not Speaking</span>
+            </div>
+        </div>
+        
+        <div class="metrics-row">
+            <div class="metric-box">
+                <div class="metric-value" id="phrasesSpoken">0</div>
+                <div class="metric-label">Phrases Spoken</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="duplicatesPrevented">0</div>
+                <div class="metric-label">Duplicates Prevented</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="bufferSize">0</div>
+                <div class="metric-label">Buffer Size</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="latencyMs">--</div>
+                <div class="metric-label">Latency (ms)</div>
+            </div>
+        </div>
+        
+        <div class="translation-display" id="translationDisplay">
+            <div style="color: #666; text-align: center; margin-top: 50px;">
+                Join a session to receive translations...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3003/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let synthesizer;
+        let socket;
+        let sessionCode;
+        let targetLanguage = 'en';
+        let isConnected = false;
+        
+        // Smart Buffer TTS Manager
+        class SmartBufferTTSManager {
+            constructor() {
+                this.buffer = new Map(); // Buffer translations by session
+                this.sessionTimers = new Map(); // Timers for silence detection
+                this.spokenPhrases = new Set(); // Track spoken phrases
+                this.silenceThreshold = 2000; // 2 seconds of silence triggers speech
+                this.minPhraseWords = 5; // Minimum words before speaking
+                this.isSpeaking = false;
+                this.speakQueue = [];
+                this.metrics = {
+                    phrasesSpoken: 0,
+                    duplicatesPrevented: 0
+                };
+            }
+            
+            processTranslation(sessionId, original, translation, isFinal) {
+                console.log(`[Buffer] Processing: sessionId=${sessionId}, isFinal=${isFinal}, translation="${translation.substring(0, 50)}..."`);
+                
+                // Clear any existing timer for this session
+                if (this.sessionTimers.has(sessionId)) {
+                    clearTimeout(this.sessionTimers.get(sessionId));
+                }
+                
+                // Update buffer with latest translation
+                this.buffer.set(sessionId, {
+                    original,
+                    translation,
+                    firstSeen: this.buffer.get(sessionId)?.firstSeen || Date.now(),
+                    lastUpdate: Date.now(),
+                    wordCount: translation.split(' ').length
+                });
+                
+                updateBufferSize();
+                
+                // Check if we should speak immediately
+                const shouldSpeakNow = isFinal || 
+                                     (this.buffer.get(sessionId).wordCount >= this.minPhraseWords);
+                
+                if (shouldSpeakNow) {
+                    // Set a shorter timer for final results or long phrases
+                    const delay = isFinal ? 500 : 1000;
+                    console.log(`[Buffer] Scheduling speech in ${delay}ms`);
+                    
+                    const timer = setTimeout(() => {
+                        this.flushSession(sessionId);
+                    }, delay);
+                    
+                    this.sessionTimers.set(sessionId, timer);
+                } else {
+                    // Set normal silence detection timer
+                    console.log(`[Buffer] Setting silence timer for ${this.silenceThreshold}ms`);
+                    
+                    const timer = setTimeout(() => {
+                        this.flushSession(sessionId);
+                    }, this.silenceThreshold);
+                    
+                    this.sessionTimers.set(sessionId, timer);
+                }
+            }
+            
+            flushSession(sessionId) {
+                const buffered = this.buffer.get(sessionId);
+                if (!buffered) return;
+                
+                console.log(`[Buffer] Flushing session ${sessionId}: "${buffered.translation.substring(0, 50)}..."`);
+                
+                // Check if we've already spoken this exact phrase
+                const phraseKey = `${buffered.translation}_${sessionId}`;
+                if (this.spokenPhrases.has(phraseKey)) {
+                    console.log(`[Buffer] DUPLICATE PREVENTED: Already spoken this phrase`);
+                    this.metrics.duplicatesPrevented++;
+                    updateMetrics();
+                    this.buffer.delete(sessionId);
+                    this.sessionTimers.delete(sessionId);
+                    updateBufferSize();
+                    return;
+                }
+                
+                // Mark as spoken
+                this.spokenPhrases.add(phraseKey);
+                
+                // Add to speak queue
+                this.speakQueue.push({
+                    text: buffered.translation,
+                    sessionId: sessionId
+                });
+                
+                // Clean up
+                this.buffer.delete(sessionId);
+                this.sessionTimers.delete(sessionId);
+                updateBufferSize();
+                
+                // Start speaking if not already
+                if (!this.isSpeaking) {
+                    this.processQueue();
+                }
+            }
+            
+            async processQueue() {
+                if (this.speakQueue.length === 0) {
+                    this.isSpeaking = false;
+                    updateSpeakingStatus(false);
+                    return;
+                }
+                
+                this.isSpeaking = true;
+                updateSpeakingStatus(true);
+                
+                const item = this.speakQueue.shift();
+                console.log(`[Buffer] Speaking: "${item.text.substring(0, 50)}..."`);
+                
+                try {
+                    await this.speak(item.text);
+                    this.metrics.phrasesSpoken++;
+                    updateMetrics();
+                    markAsSpoken(item.text);
+                } catch (error) {
+                    console.error('[Buffer] TTS error:', error);
+                }
+                
+                // Small pause between utterances
+                setTimeout(() => this.processQueue(), 300);
+            }
+            
+            speak(text) {
+                return new Promise((resolve, reject) => {
+                    if (!synthesizer) {
+                        reject('TTS not initialized');
+                        return;
+                    }
+                    
+                    synthesizer.speakTextAsync(
+                        text,
+                        result => {
+                            if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                                resolve();
+                            } else {
+                                reject(result.errorDetails);
+                            }
+                        },
+                        error => {
+                            reject(error);
+                        }
+                    );
+                });
+            }
+            
+            reset() {
+                // Clear all timers
+                for (const timer of this.sessionTimers.values()) {
+                    clearTimeout(timer);
+                }
+                
+                this.buffer.clear();
+                this.sessionTimers.clear();
+                this.spokenPhrases.clear();
+                this.speakQueue = [];
+                this.isSpeaking = false;
+                this.metrics = {
+                    phrasesSpoken: 0,
+                    duplicatesPrevented: 0
+                };
+                updateMetrics();
+                updateBufferSize();
+            }
+        }
+        
+        // Global TTS Manager
+        let ttsManager = new SmartBufferTTSManager();
+        
+        // Voice configuration
+        const voiceMap = {
+            'en': 'en-US-JennyNeural',
+            'fr': 'fr-FR-DeniseNeural',
+            'es': 'es-ES-ElviraNeural',
+            'de': 'de-DE-KatjaNeural',
+            'it': 'it-IT-ElsaNeural',
+            'pt': 'pt-BR-FranciscaNeural',
+            'zh': 'zh-CN-XiaoxiaoNeural',
+            'ja': 'ja-JP-NanamiNeural',
+            'ko': 'ko-KR-SunHiNeural',
+            'ar': 'ar-SA-ZariyahNeural',
+            'ru': 'ru-RU-SvetlanaNeural',
+            'hi': 'hi-IN-SwaraNeural'
+        };
+        
+        // Language display names
+        const languageNames = {
+            'en': '🇺🇸 English',
+            'fr': '🇫🇷 French',
+            'es': '🇪🇸 Spanish',
+            'de': '🇩🇪 German',
+            'it': '🇮🇹 Italian',
+            'pt': '🇧🇷 Portuguese',
+            'zh': '🇨🇳 Chinese',
+            'ja': '🇯🇵 Japanese',
+            'ko': '🇰🇷 Korean',
+            'ar': '🇸🇦 Arabic',
+            'ru': '🇷🇺 Russian',
+            'hi': '🇮🇳 Hindi'
+        };
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            Initialize(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                initializeSocket();
+                
+                // Check for session code in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlSession = urlParams.get('session');
+                if (urlSession) {
+                    document.getElementById('sessionCode').value = urlSession.toUpperCase();
+                }
+            });
+        });
+        
+        function Initialize(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+        
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                updateConnectionStatus(true);
+            });
+            
+            socket.on('disconnect', () => {
+                updateConnectionStatus(false);
+                isConnected = false;
+            });
+            
+            socket.on('session-not-found', () => {
+                showError('Session not found. Please check the code.');
+                isConnected = false;
+            });
+            
+            socket.on('session-joined', (data) => {
+                console.log('Successfully joined session:', data);
+            });
+            
+            socket.on('speaker-disconnected', () => {
+                showError('Speaker has disconnected');
+                ttsManager.reset();
+            });
+            
+            // Handle all translation events
+            socket.on('translation-data', handleTranslation);
+            socket.on('translation-data-ultra', handleTranslation);
+        }
+        
+        function selectLanguage(element) {
+            document.querySelectorAll('.lang-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            element.classList.add('active');
+            targetLanguage = element.dataset.lang;
+        }
+        
+        async function joinSession() {
+            const code = document.getElementById('sessionCode').value.trim().toUpperCase();
+            if (code.length !== 4) {
+                showError('Please enter a 4-character session code');
+                return;
+            }
+            
+            sessionCode = code;
+            
+            // Initialize TTS
+            try {
+                await initializeTTS();
+            } catch (error) {
+                showError('Failed to initialize text-to-speech');
+                return;
+            }
+            
+            // Join session
+            socket.emit('listener-join', {
+                sessionCode: sessionCode,
+                targetLanguage: targetLanguage
+            });
+            
+            isConnected = true;
+            
+            // Update UI
+            document.getElementById('joinBtn').style.display = 'none';
+            document.getElementById('leaveBtn').style.display = 'block';
+            document.getElementById('sessionCode').disabled = true;
+            document.querySelectorAll('.lang-option').forEach(opt => {
+                opt.style.pointerEvents = 'none';
+            });
+            
+            showSuccess(`Joined session ${sessionCode} with ${languageNames[targetLanguage]} as target language`);
+            clearTranslationDisplay();
+        }
+        
+        function leaveSession() {
+            if (sessionCode) {
+                socket.emit('listener-leave', { sessionCode });
+            }
+            
+            isConnected = false;
+            sessionCode = null;
+            
+            // Clean up TTS
+            if (synthesizer) {
+                synthesizer.close();
+                synthesizer = null;
+            }
+            
+            // Reset manager
+            ttsManager.reset();
+            
+            // Update UI
+            document.getElementById('joinBtn').style.display = 'block';
+            document.getElementById('leaveBtn').style.display = 'none';
+            document.getElementById('sessionCode').disabled = false;
+            document.getElementById('sessionCode').value = '';
+            document.querySelectorAll('.lang-option').forEach(opt => {
+                opt.style.pointerEvents = 'auto';
+            });
+            
+            clearTranslationDisplay();
+        }
+        
+        async function initializeTTS() {
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    serviceRegion
+                );
+                
+                // Set voice based on target language
+                const selectedVoice = voiceMap[targetLanguage] || 'en-US-JennyNeural';
+                speechConfig.speechSynthesisVoiceName = selectedVoice;
+                
+                // Set output format for better quality
+                speechConfig.speechSynthesisOutputFormat = SpeechSDK.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+                
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultSpeakerOutput();
+                synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig, audioConfig);
+            } catch (error) {
+                throw error;
+            }
+        }
+        
+        function handleTranslation(data) {
+            if (!isConnected || !data.translation || data.translation === data.original) {
+                return;
+            }
+            
+            // Update receiving status
+            updateReceivingStatus(true);
+            setTimeout(() => updateReceivingStatus(false), 500);
+            
+            // Create session ID based on source language and timestamp prefix
+            const sessionId = `${data.sourceLanguage}-${Math.floor(data.timestamp / 10000)}`;
+            
+            // Display translation
+            displayTranslation(data, sessionId);
+            
+            // Process for TTS
+            ttsManager.processTranslation(
+                sessionId,
+                data.original,
+                data.translation,
+                data.isFinal
+            );
+            
+            // Update latency
+            document.getElementById('latencyMs').textContent = data.latency || Math.floor(Date.now() - data.timestamp);
+        }
+        
+        function displayTranslation(data, sessionId) {
+            const display = document.getElementById('translationDisplay');
+            
+            // Clear placeholder
+            if (display.querySelector('div[style*="color: #666"]')) {
+                display.innerHTML = '';
+            }
+            
+            // Find or create entry
+            let entry = display.querySelector(`[data-session-id="${sessionId}"]`);
+            
+            if (!entry) {
+                entry = document.createElement('div');
+                entry.className = 'translation-entry pending';
+                entry.setAttribute('data-session-id', sessionId);
+                entry.setAttribute('data-translation-text', data.translation);
+                display.appendChild(entry);
+            } else {
+                // Update existing entry
+                entry.setAttribute('data-translation-text', data.translation);
+            }
+            
+            const sourceLang = data.sourceLanguage.split('-')[0];
+            const targetLang = targetLanguage;
+            
+            const statusText = ttsManager.buffer.has(sessionId) ? 
+                '<span class="status-indicator buffering">Buffering...</span>' : 
+                '<span class="status-indicator ready">Ready</span>';
+            
+            entry.innerHTML = `
+                <div class="translation-header">
+                    <span class="translation-lang">
+                        ${languageNames[sourceLang] || sourceLang} → ${languageNames[targetLang] || targetLang}
+                    </span>
+                    <span>
+                        ${statusText}
+                        <span class="translation-time">${new Date().toLocaleTimeString()}</span>
+                    </span>
+                </div>
+                <div class="translation-original">${data.original}</div>
+                <div class="translation-text">${data.translation}</div>
+                <div style="color: #666; font-size: 0.8em; margin-top: 5px;">
+                    Words: ${data.translation.split(' ').length} | ${data.isFinal ? 'Final' : 'Partial'}
+                </div>
+            `;
+            
+            display.scrollTop = display.scrollHeight;
+            
+            // Keep only last 20 entries
+            const entries = display.querySelectorAll('.translation-entry');
+            if (entries.length > 20) {
+                entries[0].remove();
+            }
+        }
+        
+        function markAsSpoken(text) {
+            const display = document.getElementById('translationDisplay');
+            const entries = display.querySelectorAll('.translation-entry');
+            
+            entries.forEach(entry => {
+                const entryText = entry.getAttribute('data-translation-text');
+                if (entryText === text) {
+                    entry.classList.remove('pending');
+                    entry.classList.add('spoken');
+                    const indicator = entry.querySelector('.status-indicator');
+                    if (indicator) {
+                        indicator.className = 'status-indicator ready';
+                        indicator.textContent = '✓ Spoken';
+                    }
+                }
+            });
+        }
+        
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('connectionDot');
+            const status = document.getElementById('connectionStatus');
+            
+            if (connected) {
+                dot.classList.add('active');
+                status.textContent = 'Connected';
+            } else {
+                dot.classList.remove('active');
+                status.textContent = 'Disconnected';
+            }
+        }
+        
+        function updateReceivingStatus(receiving) {
+            const dot = document.getElementById('receivingDot');
+            const status = document.getElementById('receivingStatus');
+            
+            if (receiving) {
+                dot.classList.add('active');
+                status.textContent = 'Receiving';
+            } else {
+                dot.classList.remove('active');
+                status.textContent = 'Waiting...';
+            }
+        }
+        
+        function updateSpeakingStatus(speaking) {
+            const dot = document.getElementById('speakingDot');
+            const status = document.getElementById('speakingStatus');
+            
+            if (speaking) {
+                dot.classList.add('speaking');
+                status.textContent = 'Speaking';
+            } else {
+                dot.classList.remove('speaking');
+                status.textContent = 'Silent';
+            }
+        }
+        
+        function updateMetrics() {
+            document.getElementById('phrasesSpoken').textContent = ttsManager.metrics.phrasesSpoken;
+            document.getElementById('duplicatesPrevented').textContent = ttsManager.metrics.duplicatesPrevented;
+        }
+        
+        function updateBufferSize() {
+            document.getElementById('bufferSize').textContent = ttsManager.buffer.size;
+        }
+        
+        function clearTranslationDisplay() {
+            const display = document.getElementById('translationDisplay');
+            if (isConnected) {
+                display.innerHTML = '<div style="color: #666; text-align: center; margin-top: 50px;">Waiting for speaker...</div>';
+            } else {
+                display.innerHTML = '<div style="color: #666; text-align: center; margin-top: 50px;">Join a session to receive translations...</div>';
+            }
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

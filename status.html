@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Azure Speech SDK - System Status</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./public/microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        h2 { color: #333; }
+        ul { list-style: none; padding: 0; }
+        li { margin: 5px 0; }
+        a { color: #0078d4; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Azure Speech SDK Browser Sample - System Status</h1>
+    <div id="results">Checking system status...</div>
+    
+    <script>
+        async function checkStatus() {
+            const results = document.getElementById('results');
+            let html = '';
+            
+            // System checks
+            html += '<h2>System Status</h2>';
+            html += '<div class="status info">';
+            html += '<ul>';
+            
+            // Check 1: Speech SDK
+            if (window.SpeechSDK) {
+                html += '<li>✅ Speech SDK loaded successfully</li>';
+                html += '<li>&nbsp;&nbsp;&nbsp;&nbsp;Version: ' + (window.SpeechSDK.version || 'Unknown') + '</li>';
+            } else {
+                html += '<li>❌ Speech SDK not loaded - Check console for errors</li>';
+            }
+            
+            // Check 2: Axios
+            if (window.axios) {
+                html += '<li>✅ Axios HTTP client loaded</li>';
+            } else {
+                html += '<li>❌ Axios not loaded</li>';
+            }
+            
+            html += '</ul></div>';
+            
+            // Server checks
+            html += '<h2>Server Status</h2>';
+            html += '<div class="status info"><ul>';
+            
+            try {
+                const response = await axios.get('http://localhost:3003/api/get-speech-token');
+                if (response.data.token && response.data.region) {
+                    html += '<li>✅ Express server running on port 3001</li>';
+                    html += '<li>✅ Token endpoint responding</li>';
+                    html += '<li>✅ Azure Speech Service connected</li>';
+                    html += '<li>&nbsp;&nbsp;&nbsp;&nbsp;Region: <strong>' + response.data.region + '</strong></li>';
+                    html += '<li>&nbsp;&nbsp;&nbsp;&nbsp;Token received (expires in ~10 minutes)</li>';
+                } else {
+                    html += '<li>❌ Token endpoint returned invalid data</li>';
+                }
+            } catch (error) {
+                html += '<li>❌ Cannot connect to Express server on port 3001</li>';
+                html += '<li>&nbsp;&nbsp;&nbsp;&nbsp;Error: ' + error.message + '</li>';
+                html += '<li>&nbsp;&nbsp;&nbsp;&nbsp;Make sure to run: <code>npm run server</code></li>';
+            }
+            
+            try {
+                await axios.get('http://localhost:8080/');
+                html += '<li>✅ HTTP server running on port 8080</li>';
+            } catch (error) {
+                html += '<li>⚠️  HTTP server may not be running on port 8080</li>';
+                html += '<li>&nbsp;&nbsp;&nbsp;&nbsp;You can still open files directly</li>';
+            }
+            
+            html += '</ul></div>';
+            
+            // Available demos
+            html += '<h2>Available Demos</h2>';
+            html += '<div class="status success">';
+            html += '<p>All demos are configured to use your Azure Speech Service credentials:</p>';
+            html += '<ul>';
+            html += '<li>📣 <a href="http://localhost:8080/public/index.html">Speech Recognition</a> - Speech-to-text, translation, intent recognition</li>';
+            html += '<li>🔊 <a href="http://localhost:8080/public/synthesis.html">Speech Synthesis</a> - Text-to-speech with multiple voices</li>';
+            html += '<li>🤖 <a href="http://localhost:8080/avatar/basic.html">Avatar Basic</a> - Animated avatar with speech</li>';
+            html += '<li>💬 <a href="http://localhost:8080/avatar/chat.html">Avatar Chat</a> - Full conversational AI with avatar</li>';
+            html += '<li>🎤 <a href="http://localhost:8080/dialog/DialogServiceConnectorSample.html">Dialog Service</a> - Voice assistant integration</li>';
+            html += '</ul>';
+            html += '</div>';
+            
+            // Instructions
+            html += '<h2>Instructions</h2>';
+            html += '<div class="status info">';
+            html += '<ol>';
+            html += '<li>Click on any demo link above</li>';
+            html += '<li>Allow microphone access when prompted</li>';
+            html += '<li>The demos will automatically get tokens from the Express server</li>';
+            html += '<li>For avatar demos, ensure you have a stable internet connection</li>';
+            html += '</ol>';
+            html += '</div>';
+            
+            results.innerHTML = html;
+        }
+        
+        window.onload = checkStatus;
+        
+        // Auto-refresh every 30 seconds
+        setInterval(checkStatus, 30000);
+    </script>
+</body>
+</html>

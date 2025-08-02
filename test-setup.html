@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Setup</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./public/microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+</head>
+<body>
+    <h1>Setup Test Results</h1>
+    <div id="results"></div>
+    
+    <script>
+        async function testSetup() {
+            const results = document.getElementById('results');
+            let html = '<ul>';
+            
+            // Test 1: Check if SDK is loaded
+            if (window.SpeechSDK) {
+                html += '<li>✅ Speech SDK loaded successfully</li>';
+            } else {
+                html += '<li>❌ Speech SDK not loaded</li>';
+            }
+            
+            // Test 2: Check if axios is loaded
+            if (window.axios) {
+                html += '<li>✅ Axios loaded successfully</li>';
+            } else {
+                html += '<li>❌ Axios not loaded</li>';
+            }
+            
+            // Test 3: Test token endpoint
+            try {
+                const response = await axios.get('http://localhost:3003/api/get-speech-token');
+                if (response.data.token && response.data.region) {
+                    html += '<li>✅ Token endpoint working (region: ' + response.data.region + ')</li>';
+                } else {
+                    html += '<li>❌ Token endpoint returned invalid data</li>';
+                }
+            } catch (error) {
+                html += '<li>❌ Token endpoint error: ' + error.message + '</li>';
+            }
+            
+            html += '</ul>';
+            html += '<h2>Next Steps:</h2>';
+            html += '<p>Open one of these demos:</p>';
+            html += '<ul>';
+            html += '<li><a href="http://localhost:8080/public/index.html">Speech Recognition Demo</a></li>';
+            html += '<li><a href="http://localhost:8080/public/synthesis.html">Speech Synthesis Demo</a></li>';
+            html += '<li><a href="http://localhost:8080/avatar/basic.html">Avatar Demo</a></li>';
+            html += '</ul>';
+            
+            results.innerHTML = html;
+        }
+        
+        window.onload = testSetup;
+    </script>
+</body>
+</html>

@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Azure Speech Translation Demos</title>
+    <meta charset="utf-8" />
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #1a1a1a;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #0078d4;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 3em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 50px;
+            font-size: 1.2em;
+        }
+        .section-title {
+            font-size: 1.8em;
+            color: #66d9ef;
+            margin: 40px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #333;
+        }
+        .demos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+        .demo-card {
+            background: #242424;
+            border-radius: 12px;
+            padding: 30px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+        .demo-card:hover {
+            border-color: #0078d4;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 120, 212, 0.3);
+        }
+        .demo-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #0078d4, #66d9ef, #a78bfa);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .demo-card:hover::before {
+            opacity: 1;
+        }
+        .demo-icon {
+            font-size: 3em;
+            margin-bottom: 20px;
+            display: block;
+            text-align: center;
+        }
+        .demo-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #fff;
+        }
+        .demo-description {
+            color: #aaa;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        .demo-features {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        .demo-features li {
+            padding: 5px 0;
+            color: #888;
+            font-size: 0.9em;
+        }
+        .demo-features li::before {
+            content: '✓ ';
+            color: #66bb6a;
+            font-weight: bold;
+        }
+        .demo-link {
+            display: inline-block;
+            background: #0078d4;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9em;
+        }
+        .demo-link:hover {
+            background: #005a9e;
+            transform: translateX(5px);
+        }
+        .demo-link.secondary {
+            background: #a78bfa;
+        }
+        .demo-link.secondary:hover {
+            background: #9061f9;
+        }
+        .tech-badge {
+            display: inline-block;
+            background: #333;
+            color: #888;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            margin: 5px 5px 0 0;
+        }
+        .new-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #ff6b6b;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .setup-section {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 40px;
+            border-left: 4px solid #0078d4;
+        }
+        .setup-section h2 {
+            color: #0078d4;
+            margin-top: 0;
+        }
+        .setup-steps {
+            counter-reset: step-counter;
+            list-style: none;
+            padding: 0;
+        }
+        .setup-steps li {
+            counter-increment: step-counter;
+            margin: 15px 0;
+            padding-left: 40px;
+            position: relative;
+        }
+        .setup-steps li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            background: #0078d4;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        code {
+            background: #1a1a1a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #66d9ef;
+        }
+        .server-status {
+            text-align: center;
+            padding: 20px;
+            background: #2a2a2a;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        .status-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 20px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #888;
+        }
+        .status-dot.running { background: #66bb6a; }
+        .status-dot.stopped { background: #ff6b6b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Azure Speech Translation Demos</h1>
+        <p class="subtitle">Real-time speech-to-speech translation powered by Azure Cognitive Services</p>
+        
+        <div class="server-status">
+            <div class="status-item">
+                <div class="status-dot" id="expressStatus"></div>
+                <span>Express Server (Port 3003)</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="websocketStatus"></div>
+                <span>WebSocket Server (Port 3004)</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot running"></div>
+                <span>HTTP Server (Port 8080)</span>
+            </div>
+        </div>
+        
+        <div class="setup-section">
+            <h2>🚀 Quick Setup</h2>
+            <ol class="setup-steps">
+                <li>Ensure your <code>.env</code> file contains valid Azure Speech API credentials</li>
+                <li>Start the Express token server: <code>npm run server</code> (port 3003)</li>
+                <li>Start the WebSocket server: <code>npm run websocket</code> (port 3004)</li>
+                <li>Access demos via HTTP server on port 8080</li>
+            </ol>
+        </div>
+
+        <h2 class="section-title">🌍 Multilingual Demos (Arabic, French, English)</h2>
+        <div class="demos-grid">
+            <div class="demo-card">
+                <span class="demo-icon">🌍</span>
+                <h3 class="demo-title">Multilingual Speaker</h3>
+                <p class="demo-description">
+                    Broadcast in Arabic, French, or English with automatic language detection. Supports multiple listeners with different target languages.
+                </p>
+                <ul class="demo-features">
+                    <li>Arabic, French & English support</li>
+                    <li>Auto language detection</li>
+                    <li>Session-based broadcasting</li>
+                    <li>Real-time translation</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Multi-language</span>
+                    <span class="tech-badge">WebSockets</span>
+                </div>
+                <a href="speaker-multilingual.html" class="demo-link">Open Speaker →</a>
+                <span class="new-badge">NEW</span>
+            </div>
+            
+            <div class="demo-card">
+                <span class="demo-icon">🌏</span>
+                <h3 class="demo-title">Multilingual Listener</h3>
+                <p class="demo-description">
+                    Listen to broadcasts in your preferred language. Real-time translation from Arabic, French, or English to 6+ languages with TTS support.
+                </p>
+                <ul class="demo-features">
+                    <li>6+ target languages</li>
+                    <li>Real-time TTS playback</li>
+                    <li>Translation confidence</li>
+                    <li>Session joining</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Neural TTS</span>
+                    <span class="tech-badge">Translation API</span>
+                </div>
+                <a href="listener-multilingual.html" class="demo-link secondary">Open Listener →</a>
+                <span class="new-badge">NEW</span>
+            </div>
+        </div>
+
+        <h2 class="section-title">🌟 Latest Demos - Advanced Multilingual Listeners</h2>
+        <div class="demos-grid">
+            <div class="demo-card" style="border: 3px solid #66bb6a;">
+                <span class="demo-icon">🎯</span>
+                <h3 class="demo-title">Stable Translation Listener</h3>
+                <p class="demo-description">
+                    Waits for stable translations before speaking. Each phrase is spoken exactly once with confidence-based delays. Perfect for accuracy-critical scenarios.
+                </p>
+                <ul class="demo-features">
+                    <li>1.5s stability delay</li>
+                    <li>Speaks each phrase once only</li>
+                    <li>85% confidence threshold</li>
+                    <li>Visual stability indicators</li>
+                    <li>Average stability time tracking</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Stable Speech</span>
+                    <span class="tech-badge">Single Playback</span>
+                    <span class="tech-badge">Confidence Based</span>
+                </div>
+                <a href="listener-stable-translation.html" class="demo-link">🎯 Stable Listener →</a>
+                <span class="new-badge" style="background: #66bb6a;">NEW</span>
+            </div>
+            
+            <div class="demo-card" style="border: 3px solid #ff6b6b;">
+                <span class="demo-icon">⚡</span>
+                <h3 class="demo-title">Ultra-Low Latency Listener</h3>
+                <p class="demo-description">
+                    Zero-repetition simultaneous translation with advanced queue management. Prevents duplicate speech through intelligent text diffing and utterance tracking. Perfect for professional interpreting.
+                </p>
+                <ul class="demo-features">
+                    <li>Zero duplicate TTS playback</li>
+                    <li>Smart text diffing algorithm</li>
+                    <li>Per-source utterance tracking</li>
+                    <li>Debug mode for monitoring</li>
+                    <li>Metrics: words spoken & duplicates prevented</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Zero Repetition</span>
+                    <span class="tech-badge">Smart Queue</span>
+                    <span class="tech-badge">Debug Mode</span>
+                </div>
+                <a href="listener-multilingual-ultra.html" class="demo-link">⚡ Ultra Listener →</a>
+                <span class="new-badge" style="background: #ff6b6b;">FAST</span>
+            </div>
+            
+            <div class="demo-card" style="border: 2px solid #4fc3d1;">
+                <span class="demo-icon">🚀</span>
+                <h3 class="demo-title">Enhanced Multilingual Listener</h3>
+                <p class="demo-description">
+                    True simultaneous translation with immediate TTS playback. Supports all major languages with partial result processing for ultra-low latency communication.
+                </p>
+                <ul class="demo-features">
+                    <li>12+ target languages</li>
+                    <li>Immediate TTS on partials</li>
+                    <li>Sub-100ms latency</li>
+                    <li>Simultaneous mode toggle</li>
+                    <li>Works with all speakers</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Ultra-Low Latency</span>
+                    <span class="tech-badge">Neural TTS</span>
+                    <span class="tech-badge">12+ Languages</span>
+                </div>
+                <a href="listener-multilingual-enhanced.html" class="demo-link">🚀 Enhanced Listener →</a>
+                <span class="new-badge">RECOMMENDED</span>
+            </div>
+        </div>
+
+        <h2 class="section-title">🇫🇷 French/English Bilingual Demos</h2>
+        <div class="demos-grid">
+            <div class="demo-card">
+                <span class="demo-icon">🎯</span>
+                <h3 class="demo-title">Bilingual Real-time Translation</h3>
+                <p class="demo-description">
+                    French Canadian/English dual recognition with early TTS triggering. Features multiple chunking strategies for simultaneous translation.
+                </p>
+                <ul class="demo-features">
+                    <li>Dual language recognition</li>
+                    <li>Early TTS triggering</li>
+                    <li>Smart chunking strategies</li>
+                    <li>Sub-500ms latency</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Chunking</span>
+                    <span class="tech-badge">Early TTS</span>
+                </div>
+                <a href="bilingual-realtime-translation.html" class="demo-link">Launch Demo →</a>
+            </div>
+            
+            <div class="demo-card">
+                <span class="demo-icon">🎨</span>
+                <h3 class="demo-title">Bilingual Speaker Style</h3>
+                <p class="demo-description">
+                    Professional broadcasting interface with French/English dual recognition. Features the polished speaker.html UI design.
+                </p>
+                <ul class="demo-features">
+                    <li>Professional UI design</li>
+                    <li>Continuous recognition</li>
+                    <li>Audio visualization</li>
+                    <li>Session management</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Fr-CA/En-CA</span>
+                    <span class="tech-badge">Pro UI</span>
+                </div>
+                <a href="bilingual-speaker-style.html" class="demo-link">Launch Demo →</a>
+            </div>
+            
+            <div class="demo-card">
+                <span class="demo-icon">🔧</span>
+                <h3 class="demo-title">Bilingual Continuous Fix</h3>
+                <p class="demo-description">
+                    Enhanced French/English recognition that fixes the "stops after first word" issue. Improved continuous recognition support.
+                </p>
+                <ul class="demo-features">
+                    <li>Fixed continuous recognition</li>
+                    <li>Dictation mode enabled</li>
+                    <li>Improved silence handling</li>
+                    <li>Stable dual streams</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Bug Fix</span>
+                    <span class="tech-badge">Continuous</span>
+                </div>
+                <a href="bilingual-translation-continuous-fix.html" class="demo-link">Launch Demo →</a>
+            </div>
+        </div>
+
+        <h2 class="section-title">⚡ Original & Core Demos</h2>
+        <div class="demos-grid">
+            <div class="demo-card">
+                <span class="demo-icon">🎙️</span>
+                <h3 class="demo-title">Basic Speaker</h3>
+                <p class="demo-description">
+                    Original speaker broadcaster with single language support. Perfect for presentations and meetings with session-based rooms.
+                </p>
+                <ul class="demo-features">
+                    <li>Session-based rooms</li>
+                    <li>Multiple listeners</li>
+                    <li>Live transcription</li>
+                    <li>Connection status</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">WebSockets</span>
+                    <span class="tech-badge">Sessions</span>
+                </div>
+                <a href="speaker.html" class="demo-link">Open Speaker →</a>
+            </div>
+            
+            <div class="demo-card">
+                <span class="demo-icon">👂</span>
+                <h3 class="demo-title">Basic Listener</h3>
+                <p class="demo-description">
+                    Original listener with real-time translation. Join speaker sessions and hear translations in your preferred language.
+                </p>
+                <ul class="demo-features">
+                    <li>Session joining</li>
+                    <li>Real-time translation</li>
+                    <li>TTS playback</li>
+                    <li>Translation display</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Translation</span>
+                    <span class="tech-badge">TTS</span>
+                </div>
+                <a href="listener.html" class="demo-link secondary">Open Listener →</a>
+            </div>
+            
+            <div class="demo-card">
+                <span class="demo-icon">👂</span>
+                <h3 class="demo-title">Real-time Listener</h3>
+                <p class="demo-description">
+                    Enhanced listener with immediate playback options and improved translation display. Optimized for low-latency scenarios.
+                </p>
+                <ul class="demo-features">
+                    <li>Immediate TTS playback</li>
+                    <li>Enhanced UI/UX</li>
+                    <li>Performance metrics</li>
+                    <li>Queue management</li>
+                </ul>
+                <div style="margin: 15px 0;">
+                    <span class="tech-badge">Low Latency</span>
+                    <span class="tech-badge">Enhanced UI</span>
+                </div>
+                <a href="listener-realtime.html" class="demo-link secondary">Enhanced Listener →</a>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 50px; color: #666;">
+            <p>Built with Azure Cognitive Services Speech SDK</p>
+            <p>Ensure all required servers are running for full functionality</p>
+        </div>
+    </div>
+    
+    <script>
+        // Check server status
+        async function checkServerStatus() {
+            // Check Express server
+            try {
+                const response = await fetch('http://localhost:3003/api/get-speech-token');
+                if (response.ok) {
+                    document.getElementById('expressStatus').className = 'status-dot running';
+                }
+            } catch (e) {
+                document.getElementById('expressStatus').className = 'status-dot stopped';
+            }
+            
+            // Check WebSocket server
+            try {
+                const response = await fetch('http://localhost:3004/health');
+                if (response.ok) {
+                    document.getElementById('websocketStatus').className = 'status-dot running';
+                }
+            } catch (e) {
+                document.getElementById('websocketStatus').className = 'status-dot stopped';
+            }
+        }
+        
+        // Check status on load and periodically
+        checkServerStatus();
+        setInterval(checkServerStatus, 5000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>🎙️ Bilingual Speaker - French/English</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0f0f0f;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #1a1a1a;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            font-size: 3em;
+            margin: 0 0 10px 0;
+            color: #4fc3f7;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 1.2em;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        .section {
+            background: #242424;
+            border-radius: 10px;
+            padding: 30px;
+        }
+        .section h2 {
+            color: #4fc3f7;
+            margin: 0 0 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .control-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .control-item label {
+            font-size: 0.8em;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        select, input {
+            background: #2a2a2a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #4fc3f7;
+        }
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        button {
+            background: #4fc3f7;
+            color: #000;
+            border: none;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        button:hover:not(:disabled) {
+            background: #29b6f6;
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .button-grid.full-width {
+            grid-template-columns: 1fr;
+        }
+        .session-code-container {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .session-code-label {
+            font-size: 0.8em;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        .session-code {
+            font-size: 3em;
+            font-weight: bold;
+            color: #4fc3f7;
+            letter-spacing: 8px;
+            font-family: monospace;
+        }
+        .share-container {
+            background: #333;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .share-container input {
+            flex: 1;
+            background: #444;
+            border: none;
+            color: #aaa;
+            font-size: 0.9em;
+        }
+        .share-container button {
+            background: #555;
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+        .share-container button:hover {
+            background: #666;
+        }
+        .status-bar {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1em;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #444;
+        }
+        .status-dot.connected {
+            background: #4fc3f7;
+        }
+        .status-dot.broadcasting {
+            background: #ff6b6b;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .language-detector {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .detected-language {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .lang-fr {
+            background: #0066ff;
+            color: white;
+        }
+        .lang-en {
+            background: #ff6600;
+            color: white;
+        }
+        .lang-none {
+            background: #333;
+            color: #888;
+        }
+        .confidence-bar {
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .confidence-fill {
+            height: 100%;
+            background: #4fc3f7;
+            transition: width 0.3s;
+        }
+        .audio-visualizer {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            margin-bottom: 20px;
+        }
+        .freq-bar {
+            width: 6px;
+            background: #4fc3f7;
+            border-radius: 3px;
+            transition: height 0.1s ease;
+        }
+        .transcript-container {
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 20px;
+            height: 400px;
+            overflow-y: auto;
+        }
+        .transcript-container h3 {
+            color: #4fc3f7;
+            margin: 0 0 20px 0;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: sticky;
+            top: 0;
+            background: #1a1a1a;
+            padding-bottom: 10px;
+        }
+        .transcript-segment {
+            margin: 10px 0;
+            padding: 15px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            border-left: 3px solid #4fc3f7;
+        }
+        .transcript-segment.partial-segment {
+            opacity: 0.7;
+            border-left-color: #888;
+        }
+        .transcript-segment.fr-CA {
+            border-left-color: #0066ff;
+        }
+        .transcript-segment.en-CA {
+            border-left-color: #ff6600;
+        }
+        .timestamp {
+            font-size: 0.75em;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .metric-card {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4fc3f7;
+            margin: 10px 0;
+        }
+        .metric-label {
+            font-size: 0.8em;
+            color: #888;
+            text-transform: uppercase;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .toggle-container input[type="checkbox"] {
+            width: auto;
+        }
+        .toggle-container label {
+            color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎙️ Bilingual Speaker</h1>
+            <p class="subtitle">Automatic French/English Detection & Broadcasting</p>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Disconnected</span>
+            </div>
+            <div id="connectionTime">--:--:--</div>
+        </div>
+        
+        <div class="session-code-container">
+            <div class="session-code-label">Session Code</div>
+            <div class="session-code" id="sessionCode">----</div>
+            <div class="share-container">
+                <input type="text" id="shareUrl" readonly placeholder="Share URL will appear here">
+                <button onclick="copyShareUrl()">Copy Link</button>
+            </div>
+        </div>
+        
+        <div class="language-detector">
+            <h3>Detected Language</h3>
+            <div class="detected-language lang-none" id="detectedLanguage">
+                Waiting for speech...
+            </div>
+            <div class="confidence-bar">
+                <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
+            </div>
+            <div style="margin-top: 10px; color: #666;">
+                Confidence: <span id="confidenceValue">0%</span>
+            </div>
+        </div>
+        
+        <div class="audio-visualizer" id="audioVisualizer">
+            <div id="frequencyBars"></div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="section">
+                <h2>⚙️ Settings</h2>
+                
+                <div class="control-grid">
+                    <div class="control-item">
+                        <label>Recognition Mode</label>
+                        <select id="recognitionMode">
+                            <option value="dual">Dual Recognition (FR/EN)</option>
+                            <option value="auto">Auto-Detect Language</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
+                        <label>Streaming Mode</label>
+                        <select id="streamingMode">
+                            <option value="aggressive">Aggressive (Low Latency)</option>
+                            <option value="balanced">Balanced</option>
+                            <option value="accurate">Accurate (High Latency)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <div class="toggle-container">
+                        <input type="checkbox" id="enablePartials" checked>
+                        <label for="enablePartials">Stream partial results</label>
+                    </div>
+                    <div class="toggle-container">
+                        <input type="checkbox" id="enableDictation" checked>
+                        <label for="enableDictation">Continuous dictation mode</label>
+                    </div>
+                    <div class="toggle-container">
+                        <input type="checkbox" id="enableProfanity">
+                        <label for="enableProfanity">Enable profanity filter</label>
+                    </div>
+                </div>
+                
+                <div class="button-grid">
+                    <button id="startBtn" onclick="startBroadcasting()">
+                        <span>🚀</span> Start Broadcasting
+                    </button>
+                    <button id="stopBtn" onclick="stopBroadcasting()" disabled>
+                        <span>⏹️</span> Stop
+                    </button>
+                </div>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Latency</div>
+                        <div class="metric-value" id="latencyMetric">--</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Words/Min</div>
+                        <div class="metric-value" id="wordsMetric">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Listeners</div>
+                        <div class="metric-value" id="listenersMetric">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Duration</div>
+                        <div class="metric-value" id="durationMetric">0:00</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>📝 Live Transcript</h2>
+                <div class="transcript-container">
+                    <h3>Broadcasting Transcript</h3>
+                    <div id="transcriptDisplay"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3003/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let socket;
+        let sessionCode;
+        
+        // Recognition
+        let frenchRecognizer;
+        let englishRecognizer;
+        let currentLanguage = null;
+        let isBroadcasting = false;
+        
+        // Metrics
+        let startTime;
+        let wordCount = 0;
+        let recognitionStartTime;
+        let lastPartial = '';
+        let durationInterval;
+        
+        // Language detection
+        let languageScores = { 'fr-CA': 0, 'en-CA': 0 };
+        let lastLanguageSwitch = 0;
+        const LANGUAGE_SWITCH_THRESHOLD = 0.7;
+        const LANGUAGE_HYSTERESIS = 500; // ms
+        
+        // Audio visualization
+        let audioContext;
+        let analyser;
+        let microphone;
+        let dataArray;
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            Initialize(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                initializeSocket();
+                initializeAudioVisualizer();
+                generateSessionCode();
+                updateConnectionTime();
+            });
+        });
+        
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                console.log('Connected to WebSocket server');
+                updateStatus('connected', '🟢 Connected');
+                if (sessionCode) {
+                    socket.emit('speaker-join', { 
+                        sessionCode, 
+                        sourceLanguage: 'bilingual-fr-en' 
+                    });
+                }
+            });
+            
+            socket.on('listener-joined', (data) => {
+                updateListenerCount(1);
+            });
+            
+            socket.on('listener-left', (data) => {
+                updateListenerCount(-1);
+            });
+            
+            socket.on('disconnect', () => {
+                updateStatus('disconnected', '🔴 Disconnected');
+            });
+        }
+        
+        function initializeAudioVisualizer() {
+            const bars = document.getElementById('frequencyBars');
+            for (let i = 0; i < 32; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'freq-bar';
+                bar.style.height = '20px';
+                bars.appendChild(bar);
+            }
+        }
+        
+        function generateSessionCode() {
+            sessionCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+            document.getElementById('sessionCode').textContent = sessionCode;
+            updateShareUrl();
+        }
+        
+        function updateShareUrl() {
+            const url = `${window.location.origin}/public/listener.html?session=${sessionCode}`;
+            document.getElementById('shareUrl').value = url;
+        }
+        
+        function copyShareUrl() {
+            const input = document.getElementById('shareUrl');
+            input.select();
+            document.execCommand('copy');
+            
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = originalText, 2000);
+        }
+        
+        async function RequestAuthorizationToken() {
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                return res.data.region;
+            } catch (err) {
+                console.error('Failed to get authorization token:', err);
+                throw err;
+            }
+        }
+        
+        async function startBroadcasting() {
+            try {
+                updateStatus('broadcasting', '🔴 Broadcasting...');
+                
+                await RequestAuthorizationToken();
+                
+                const mode = document.getElementById('recognitionMode').value;
+                
+                if (mode === 'dual') {
+                    await initializeDualRecognition();
+                } else {
+                    await initializeSingleRecognition();
+                }
+                
+                // Join WebSocket room
+                socket.emit('speaker-join', { 
+                    sessionCode, 
+                    sourceLanguage: 'bilingual-fr-en' 
+                });
+                
+                isBroadcasting = true;
+                startTime = Date.now();
+                
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                
+                startAudioVisualization();
+                startDurationTimer();
+                
+            } catch (error) {
+                console.error('Failed to start:', error);
+                updateStatus('connected', '🟢 Connected');
+            }
+        }
+        
+        async function initializeDualRecognition() {
+            // French Canadian recognizer
+            const frenchConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                authorizationToken, 
+                serviceRegion
+            );
+            frenchConfig.speechRecognitionLanguage = 'fr-CA';
+            frenchConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+            
+            if (document.getElementById('enableDictation').checked) {
+                frenchConfig.enableDictation();
+            }
+            
+            // Configure based on streaming mode
+            const streamingMode = document.getElementById('streamingMode').value;
+            if (streamingMode === 'aggressive') {
+                frenchConfig.setProperty(
+                    SpeechSDK.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority,
+                    "Latency"
+                );
+                frenchConfig.setProperty(
+                    SpeechSDK.PropertyId.Speech_SegmentationSilenceTimeoutMs,
+                    "1000"
+                );
+            }
+            
+            // English Canadian recognizer
+            const englishConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                authorizationToken, 
+                serviceRegion
+            );
+            englishConfig.speechRecognitionLanguage = 'en-CA';
+            englishConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+            
+            if (document.getElementById('enableDictation').checked) {
+                englishConfig.enableDictation();
+            }
+            
+            if (streamingMode === 'aggressive') {
+                englishConfig.setProperty(
+                    SpeechSDK.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority,
+                    "Latency"
+                );
+                englishConfig.setProperty(
+                    SpeechSDK.PropertyId.Speech_SegmentationSilenceTimeoutMs,
+                    "1000"
+                );
+            }
+            
+            const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+            
+            frenchRecognizer = new SpeechSDK.SpeechRecognizer(frenchConfig, audioConfig);
+            englishRecognizer = new SpeechSDK.SpeechRecognizer(englishConfig, audioConfig);
+            
+            // Set up event handlers
+            setupDualRecognitionHandlers();
+            
+            // Start both recognizers
+            await Promise.all([
+                new Promise((resolve, reject) => {
+                    frenchRecognizer.startContinuousRecognitionAsync(resolve, reject);
+                }),
+                new Promise((resolve, reject) => {
+                    englishRecognizer.startContinuousRecognitionAsync(resolve, reject);
+                })
+            ]);
+        }
+        
+        async function initializeSingleRecognition() {
+            const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                authorizationToken, 
+                serviceRegion
+            );
+            
+            const autoDetectConfig = SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages(['fr-CA', 'en-CA']);
+            
+            speechConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+            
+            if (document.getElementById('enableDictation').checked) {
+                speechConfig.enableDictation();
+            }
+            
+            const streamingMode = document.getElementById('streamingMode').value;
+            if (streamingMode === 'aggressive') {
+                speechConfig.setProperty(
+                    SpeechSDK.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority,
+                    "Latency"
+                );
+            }
+            
+            const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+            
+            const recognizer = SpeechSDK.SpeechRecognizer.FromConfig(speechConfig, autoDetectConfig, audioConfig);
+            
+            setupSingleRecognitionHandlers(recognizer);
+            
+            await new Promise((resolve, reject) => {
+                recognizer.startContinuousRecognitionAsync(resolve, reject);
+            });
+            
+            frenchRecognizer = recognizer;
+        }
+        
+        function setupDualRecognitionHandlers() {
+            // French handlers
+            frenchRecognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
+                    processRecognitionResult(e.result, 'fr-CA', false);
+                }
+            };
+            
+            frenchRecognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                    processRecognitionResult(e.result, 'fr-CA', true);
+                }
+            };
+            
+            // English handlers
+            englishRecognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
+                    processRecognitionResult(e.result, 'en-CA', false);
+                }
+            };
+            
+            englishRecognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                    processRecognitionResult(e.result, 'en-CA', true);
+                }
+            };
+        }
+        
+        function setupSingleRecognitionHandlers(recognizer) {
+            recognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
+                    const lang = e.result.language || 'en-CA';
+                    processRecognitionResult(e.result, lang, false);
+                }
+            };
+            
+            recognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                    const lang = e.result.language || 'en-CA';
+                    processRecognitionResult(e.result, lang, true);
+                }
+            };
+        }
+        
+        function processRecognitionResult(result, language, isFinal) {
+            const text = result.text;
+            if (!text) return;
+            
+            recognitionStartTime = recognitionStartTime || Date.now();
+            
+            const confidence = result.confidence || 0.9;
+            
+            // Update language scores
+            languageScores[language] = confidence;
+            
+            // Language detection logic
+            if (document.getElementById('recognitionMode').value === 'dual') {
+                const timeSinceSwitch = Date.now() - lastLanguageSwitch;
+                const threshold = timeSinceSwitch < LANGUAGE_HYSTERESIS 
+                    ? LANGUAGE_SWITCH_THRESHOLD + 0.1 
+                    : LANGUAGE_SWITCH_THRESHOLD;
+                
+                const otherLang = language === 'fr-CA' ? 'en-CA' : 'fr-CA';
+                if (confidence > threshold && confidence > languageScores[otherLang]) {
+                    if (currentLanguage !== language) {
+                        currentLanguage = language;
+                        lastLanguageSwitch = Date.now();
+                        updateLanguageDisplay(language, confidence);
+                    }
+                } else if (currentLanguage !== language) {
+                    return;
+                }
+            } else {
+                currentLanguage = language;
+                updateLanguageDisplay(language, confidence);
+            }
+            
+            // Update transcript
+            if (isFinal) {
+                updateTranscriptFinal(text, language);
+                
+                // Send to WebSocket
+                socket.emit('speech-final', {
+                    sessionCode,
+                    text: text,
+                    sourceLanguage: language,
+                    timestamp: Date.now(),
+                    confidence: confidence
+                });
+                
+                // Update metrics
+                wordCount += text.split(' ').length;
+                updateWordRate();
+                lastPartial = '';
+            } else if (document.getElementById('enablePartials').checked && text !== lastPartial) {
+                updateTranscriptPartial(text, language);
+                
+                socket.emit('speech-partial', {
+                    sessionCode,
+                    text: text,
+                    sourceLanguage: language,
+                    timestamp: Date.now()
+                });
+                
+                lastPartial = text;
+            }
+            
+            updateLatencyMetric();
+        }
+        
+        function updateLanguageDisplay(language, confidence) {
+            const display = document.getElementById('detectedLanguage');
+            const confidenceFill = document.getElementById('confidenceFill');
+            const confidenceValue = document.getElementById('confidenceValue');
+            
+            if (language === 'fr-CA') {
+                display.textContent = 'Français';
+                display.className = 'detected-language lang-fr';
+            } else if (language === 'en-CA') {
+                display.textContent = 'English';
+                display.className = 'detected-language lang-en';
+            }
+            
+            const percent = Math.round(confidence * 100);
+            confidenceFill.style.width = percent + '%';
+            confidenceValue.textContent = percent + '%';
+        }
+        
+        function updateTranscriptPartial(text, language) {
+            const display = document.getElementById('transcriptDisplay');
+            let partial = display.querySelector('.partial-segment');
+            
+            if (!partial) {
+                partial = document.createElement('div');
+                partial.className = `transcript-segment partial-segment ${language}`;
+                display.appendChild(partial);
+            }
+            
+            partial.innerHTML = `
+                <div class="timestamp">${language} • recognizing...</div>
+                <div>${text}</div>
+            `;
+            
+            display.scrollTop = display.scrollHeight;
+        }
+        
+        function updateTranscriptFinal(text, language) {
+            const display = document.getElementById('transcriptDisplay');
+            
+            // Remove partial
+            const partial = display.querySelector('.partial-segment');
+            if (partial) partial.remove();
+            
+            // Add final
+            const segment = document.createElement('div');
+            segment.className = `transcript-segment ${language}`;
+            segment.innerHTML = `
+                <div class="timestamp">${new Date().toLocaleTimeString()} • ${language}</div>
+                <div>${text}</div>
+            `;
+            display.appendChild(segment);
+            display.scrollTop = display.scrollHeight;
+        }
+        
+        async function stopBroadcasting() {
+            isBroadcasting = false;
+            
+            const stopPromises = [];
+            
+            if (frenchRecognizer) {
+                stopPromises.push(new Promise((resolve) => {
+                    frenchRecognizer.stopContinuousRecognitionAsync(() => {
+                        frenchRecognizer.close();
+                        frenchRecognizer = undefined;
+                        resolve();
+                    }, resolve);
+                }));
+            }
+            
+            if (englishRecognizer && englishRecognizer !== frenchRecognizer) {
+                stopPromises.push(new Promise((resolve) => {
+                    englishRecognizer.stopContinuousRecognitionAsync(() => {
+                        englishRecognizer.close();
+                        englishRecognizer = undefined;
+                        resolve();
+                    }, resolve);
+                }));
+            }
+            
+            await Promise.all(stopPromises);
+            
+            updateStatus('connected', '🟢 Connected');
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            
+            stopAudioVisualization();
+            stopDurationTimer();
+            
+            socket.emit('speaker-stop', { sessionCode });
+        }
+        
+        function updateStatus(status, text) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            dot.className = 'status-dot ' + status;
+            statusText.textContent = text;
+        }
+        
+        function updateConnectionTime() {
+            setInterval(() => {
+                const now = new Date();
+                document.getElementById('connectionTime').textContent = 
+                    now.toLocaleTimeString();
+            }, 1000);
+        }
+        
+        function startDurationTimer() {
+            durationInterval = setInterval(() => {
+                if (startTime) {
+                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    document.getElementById('durationMetric').textContent = 
+                        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+        
+        function stopDurationTimer() {
+            if (durationInterval) {
+                clearInterval(durationInterval);
+                durationInterval = null;
+            }
+        }
+        
+        function updateLatencyMetric() {
+            if (recognitionStartTime) {
+                const latency = Date.now() - recognitionStartTime;
+                document.getElementById('latencyMetric').textContent = latency + 'ms';
+            }
+        }
+        
+        function updateWordRate() {
+            if (startTime) {
+                const minutes = (Date.now() - startTime) / 60000;
+                const rate = Math.round(wordCount / minutes);
+                document.getElementById('wordsMetric').textContent = rate;
+            }
+        }
+        
+        function updateListenerCount(delta) {
+            const metric = document.getElementById('listenersMetric');
+            const current = parseInt(metric.textContent) || 0;
+            metric.textContent = Math.max(0, current + delta);
+        }
+        
+        function startAudioVisualization() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    microphone = audioContext.createMediaStreamSource(stream);
+                    microphone.connect(analyser);
+                    dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    visualize();
+                })
+                .catch(err => console.error('Error accessing microphone:', err));
+        }
+        
+        function visualize() {
+            if (!isBroadcasting) return;
+            
+            requestAnimationFrame(visualize);
+            analyser.getByteFrequencyData(dataArray);
+            
+            const bars = document.querySelectorAll('.freq-bar');
+            const step = Math.floor(dataArray.length / bars.length);
+            
+            bars.forEach((bar, i) => {
+                const value = dataArray[i * step];
+                const height = (value / 255) * 100;
+                bar.style.height = Math.max(5, height) + 'px';
+            });
+        }
+        
+        function stopAudioVisualization() {
+            if (microphone) {
+                microphone.disconnect();
+                microphone = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            document.querySelectorAll('.freq-bar').forEach(bar => {
+                bar.style.height = '20px';
+            });
+        }
+        
+        // SDK initialization
+        function Initialize(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+    </script>
+</body>
+</html>

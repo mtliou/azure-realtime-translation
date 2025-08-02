@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Real-Time Speech to Speech Translation - Azure</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0078d4;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .control-group {
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        .control-group h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background: #0078d4;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        button:hover:not(:disabled) {
+            background: #005a9e;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .status.active {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.inactive {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.processing {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .transcript-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .transcript-box {
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+        .transcript-box h3 {
+            margin-top: 0;
+            color: #0078d4;
+        }
+        .transcript-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #0078d4;
+        }
+        .transcript-item.final {
+            border-left-color: #28a745;
+        }
+        .latency-display {
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        .performance-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+        }
+        .metric {
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0078d4;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Real-Time Speech to Speech Translation</h1>
+        
+        <div id="error-message" class="error-message"></div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h3>Source Language</h3>
+                <select id="sourceLanguage">
+                    <option value="en-US">English (US)</option>
+                    <option value="es-ES">Spanish (Spain)</option>
+                    <option value="fr-FR">French (France)</option>
+                    <option value="de-DE">German</option>
+                    <option value="it-IT">Italian</option>
+                    <option value="pt-BR">Portuguese (Brazil)</option>
+                    <option value="zh-CN">Chinese (Mandarin)</option>
+                    <option value="ja-JP">Japanese</option>
+                    <option value="ko-KR">Korean</option>
+                    <option value="ru-RU">Russian</option>
+                    <option value="ar-SA">Arabic</option>
+                    <option value="hi-IN">Hindi</option>
+                </select>
+                <button id="startTranslation" onclick="startTranslation()">
+                    🎤 Start Translation
+                </button>
+                <button id="stopTranslation" onclick="stopTranslation()" disabled>
+                    ⏹️ Stop Translation
+                </button>
+            </div>
+            
+            <div class="control-group">
+                <h3>Target Language</h3>
+                <select id="targetLanguage">
+                    <option value="es">Spanish</option>
+                    <option value="en">English</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="it">Italian</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="zh-Hans">Chinese (Simplified)</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="ru">Russian</option>
+                    <option value="ar">Arabic</option>
+                    <option value="hi">Hindi</option>
+                </select>
+                <select id="targetVoice">
+                    <option value="es-ES-ElviraNeural">Spanish - Elvira (Female)</option>
+                    <option value="es-ES-AlvaroNeural">Spanish - Alvaro (Male)</option>
+                </select>
+                <div style="margin-top: 10px;">
+                    <label>
+                        <input type="checkbox" id="autoSpeak" checked> 
+                        Auto-speak translations
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div id="status" class="status inactive">
+            🔴 Not Connected - Click "Start Translation" to begin
+        </div>
+        
+        <div class="performance-metrics">
+            <div class="metric">
+                <div class="metric-value" id="latencyValue">--</div>
+                <div class="metric-label">Latency (ms)</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value" id="accuracyValue">--</div>
+                <div class="metric-label">Confidence %</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value" id="wordsValue">0</div>
+                <div class="metric-label">Words/Min</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value" id="sessionsValue">0</div>
+                <div class="metric-label">Translations</div>
+            </div>
+        </div>
+        
+        <div class="transcript-container">
+            <div class="transcript-box">
+                <h3>🎤 Original Speech</h3>
+                <div id="originalTranscript"></div>
+            </div>
+            <div class="transcript-box">
+                <h3>🔊 Translation</h3>
+                <div id="translatedTranscript"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3003/api/get-speech-token";
+        let authorizationToken;
+        let SpeechSDK;
+        let recognizer;
+        let synthesizer;
+        let translationConfig;
+        
+        // Performance tracking
+        let startTime;
+        let wordCount = 0;
+        let sessionCount = 0;
+        let lastWordTime = Date.now();
+        
+        // Voice mappings for different languages
+        const voiceMap = {
+            'es': [
+                { value: 'es-ES-ElviraNeural', text: 'Spanish - Elvira (Female)' },
+                { value: 'es-ES-AlvaroNeural', text: 'Spanish - Alvaro (Male)' },
+                { value: 'es-MX-DaliaNeural', text: 'Spanish (Mexico) - Dalia (Female)' }
+            ],
+            'en': [
+                { value: 'en-US-JennyNeural', text: 'English - Jenny (Female)' },
+                { value: 'en-US-GuyNeural', text: 'English - Guy (Male)' },
+                { value: 'en-GB-SoniaNeural', text: 'English (UK) - Sonia (Female)' }
+            ],
+            'fr': [
+                { value: 'fr-FR-DeniseNeural', text: 'French - Denise (Female)' },
+                { value: 'fr-FR-HenriNeural', text: 'French - Henri (Male)' }
+            ],
+            'de': [
+                { value: 'de-DE-KatjaNeural', text: 'German - Katja (Female)' },
+                { value: 'de-DE-ConradNeural', text: 'German - Conrad (Male)' }
+            ],
+            'it': [
+                { value: 'it-IT-ElsaNeural', text: 'Italian - Elsa (Female)' },
+                { value: 'it-IT-DiegoNeural', text: 'Italian - Diego (Male)' }
+            ],
+            'pt': [
+                { value: 'pt-BR-FranciscaNeural', text: 'Portuguese - Francisca (Female)' },
+                { value: 'pt-BR-AntonioNeural', text: 'Portuguese - Antonio (Male)' }
+            ],
+            'zh-Hans': [
+                { value: 'zh-CN-XiaoxiaoNeural', text: 'Chinese - Xiaoxiao (Female)' },
+                { value: 'zh-CN-YunxiNeural', text: 'Chinese - Yunxi (Male)' }
+            ],
+            'ja': [
+                { value: 'ja-JP-NanamiNeural', text: 'Japanese - Nanami (Female)' },
+                { value: 'ja-JP-KeitaNeural', text: 'Japanese - Keita (Male)' }
+            ],
+            'ko': [
+                { value: 'ko-KR-SunHiNeural', text: 'Korean - Sun-Hi (Female)' },
+                { value: 'ko-KR-InJoonNeural', text: 'Korean - InJoon (Male)' }
+            ],
+            'ru': [
+                { value: 'ru-RU-DariyaNeural', text: 'Russian - Dariya (Female)' },
+                { value: 'ru-RU-DmitryNeural', text: 'Russian - Dmitry (Male)' }
+            ],
+            'ar': [
+                { value: 'ar-SA-ZariyahNeural', text: 'Arabic - Zariyah (Female)' },
+                { value: 'ar-SA-HamedNeural', text: 'Arabic - Hamed (Male)' }
+            ],
+            'hi': [
+                { value: 'hi-IN-SwaraNeural', text: 'Hindi - Swara (Female)' },
+                { value: 'hi-IN-MadhurNeural', text: 'Hindi - Madhur (Male)' }
+            ]
+        };
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            Initialize(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                updateTargetVoices();
+            });
+            
+            // Update voices when target language changes
+            document.getElementById('targetLanguage').addEventListener('change', updateTargetVoices);
+        });
+        
+        function updateTargetVoices() {
+            const targetLang = document.getElementById('targetLanguage').value;
+            const voiceSelect = document.getElementById('targetVoice');
+            const voices = voiceMap[targetLang] || [];
+            
+            voiceSelect.innerHTML = '';
+            voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.value;
+                option.textContent = voice.text;
+                voiceSelect.appendChild(option);
+            });
+        }
+        
+        async function RequestAuthorizationToken() {
+            if (authorizationEndpoint) {
+                try {
+                    const res = await axios.get(authorizationEndpoint);
+                    authorizationToken = res.data.token;
+                    console.log('Token received');
+                    return res.data.region;
+                } catch (err) {
+                    showError('Failed to get authorization token. Make sure the server is running.');
+                    throw err;
+                }
+            }
+        }
+        
+        async function startTranslation() {
+            try {
+                showStatus('processing', '🟡 Connecting to Azure Speech Services...');
+                
+                const region = await RequestAuthorizationToken();
+                const sourceLanguage = document.getElementById('sourceLanguage').value;
+                const targetLanguage = document.getElementById('targetLanguage').value;
+                
+                // Create translation config
+                translationConfig = SpeechSDK.SpeechTranslationConfig.fromAuthorizationToken(
+                    authorizationToken, 
+                    region
+                );
+                
+                translationConfig.speechRecognitionLanguage = sourceLanguage;
+                translationConfig.addTargetLanguage(targetLanguage);
+                
+                // Enable continuous recognition for real-time translation
+                translationConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+                
+                // Create audio config for microphone
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                
+                // Create recognizer
+                recognizer = new SpeechSDK.TranslationRecognizer(translationConfig, audioConfig);
+                
+                // Create synthesizer for speech output
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    region
+                );
+                speechConfig.speechSynthesisVoiceName = document.getElementById('targetVoice').value;
+                synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig);
+                
+                // Set up event handlers
+                setupRecognizerEvents();
+                
+                // Start continuous recognition
+                recognizer.startContinuousRecognitionAsync(
+                    () => {
+                        showStatus('active', '🟢 Live Translation Active - Speak now!');
+                        document.getElementById('startTranslation').disabled = true;
+                        document.getElementById('stopTranslation').disabled = false;
+                        startTime = Date.now();
+                    },
+                    (err) => {
+                        showError('Failed to start translation: ' + err);
+                        console.error('Recognition error:', err);
+                    }
+                );
+                
+            } catch (error) {
+                showError('Failed to initialize translation: ' + error.message);
+                console.error('Initialization error:', error);
+            }
+        }
+        
+        function setupRecognizerEvents() {
+            // Recognizing event - fired for interim results
+            recognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.TranslatingSpeech) {
+                    const translation = e.result.translations.get(document.getElementById('targetLanguage').value);
+                    if (translation) {
+                        updateTranscript('original', e.result.text, false);
+                        updateTranscript('translated', translation, false);
+                        updateLatency();
+                    }
+                }
+            };
+            
+            // Recognized event - fired when a final result is received
+            recognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.TranslatedSpeech) {
+                    const translation = e.result.translations.get(document.getElementById('targetLanguage').value);
+                    if (translation && translation.length > 0) {
+                        updateTranscript('original', e.result.text, true);
+                        updateTranscript('translated', translation, true);
+                        
+                        // Update metrics
+                        sessionCount++;
+                        document.getElementById('sessionsValue').textContent = sessionCount;
+                        
+                        // Calculate confidence
+                        const confidence = Math.round((e.result.confidence || 0.95) * 100);
+                        document.getElementById('accuracyValue').textContent = confidence;
+                        
+                        // Speak the translation if auto-speak is enabled
+                        if (document.getElementById('autoSpeak').checked) {
+                            speakTranslation(translation);
+                        }
+                        
+                        updateLatency();
+                        updateWordRate(e.result.text);
+                    }
+                } else if (e.result.reason === SpeechSDK.ResultReason.NoMatch) {
+                    console.log('No speech could be recognized');
+                }
+            };
+            
+            // Error handling
+            recognizer.canceled = (s, e) => {
+                console.error('Recognition canceled:', e.errorDetails);
+                showError('Translation canceled: ' + e.errorDetails);
+                stopTranslation();
+            };
+            
+            // Session events
+            recognizer.sessionStarted = (s, e) => {
+                console.log('Session started');
+            };
+            
+            recognizer.sessionStopped = (s, e) => {
+                console.log('Session stopped');
+            };
+        }
+        
+        function speakTranslation(text) {
+            // Update voice if language changed
+            const voiceName = document.getElementById('targetVoice').value;
+            if (synthesizer.properties.getProperty('SpeechSynthesisVoiceName') !== voiceName) {
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    translationConfig.region
+                );
+                speechConfig.speechSynthesisVoiceName = voiceName;
+                synthesizer.close();
+                synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig);
+            }
+            
+            synthesizer.speakTextAsync(
+                text,
+                result => {
+                    if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                        console.log('Speech synthesized');
+                    }
+                },
+                error => {
+                    console.error('Speech synthesis error:', error);
+                }
+            );
+        }
+        
+        function stopTranslation() {
+            if (recognizer) {
+                recognizer.stopContinuousRecognitionAsync(
+                    () => {
+                        showStatus('inactive', '🔴 Translation Stopped');
+                        document.getElementById('startTranslation').disabled = false;
+                        document.getElementById('stopTranslation').disabled = true;
+                        recognizer.close();
+                        recognizer = undefined;
+                    },
+                    (err) => {
+                        console.error('Error stopping recognition:', err);
+                    }
+                );
+            }
+            
+            if (synthesizer) {
+                synthesizer.close();
+                synthesizer = undefined;
+            }
+        }
+        
+        function updateTranscript(type, text, isFinal) {
+            const container = type === 'original' ? 
+                document.getElementById('originalTranscript') : 
+                document.getElementById('translatedTranscript');
+            
+            if (isFinal && text) {
+                const item = document.createElement('div');
+                item.className = 'transcript-item final';
+                item.textContent = text;
+                container.appendChild(item);
+                container.scrollTop = container.scrollHeight;
+            } else if (text) {
+                // Update or create interim result
+                let interim = container.querySelector('.interim');
+                if (!interim) {
+                    interim = document.createElement('div');
+                    interim.className = 'transcript-item interim';
+                    container.appendChild(interim);
+                }
+                interim.textContent = text;
+            }
+        }
+        
+        function updateLatency() {
+            if (startTime) {
+                const latency = Date.now() - startTime;
+                document.getElementById('latencyValue').textContent = 
+                    latency < 1000 ? latency : Math.round(latency / 100) / 10 + 'k';
+            }
+        }
+        
+        function updateWordRate(text) {
+            if (text) {
+                const words = text.split(' ').length;
+                wordCount += words;
+                const minutes = (Date.now() - lastWordTime) / 60000;
+                const rate = Math.round(wordCount / minutes);
+                document.getElementById('wordsValue').textContent = rate;
+            }
+        }
+        
+        function showStatus(type, message) {
+            const status = document.getElementById('status');
+            status.className = 'status ' + type;
+            status.textContent = message;
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // SDK initialization
+        function Initialize(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Zero-Repetition Translation - Guaranteed No Duplicates</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #1a1a1a;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #10b981;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #10b981, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .control-panel {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .transcript-panel {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .session-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .session-input input {
+            flex: 1;
+            padding: 12px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 18px;
+            font-family: monospace;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .language-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 15px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .lang-option {
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-size: 0.9em;
+            border: 2px solid transparent;
+        }
+        .lang-option.active {
+            background: #10b981;
+            color: #000;
+            border-color: #059669;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #10b981;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .status-bar {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: #2a2a2a;
+            border-radius: 15px;
+            font-size: 0.85em;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #888;
+        }
+        .status-dot.active {
+            background: #10b981;
+        }
+        .status-dot.speaking {
+            background: #3b82f6;
+            animation: pulse 1s infinite;
+        }
+        .status-dot.processing {
+            background: #f59e0b;
+            animation: pulse 0.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .metric-box {
+            background: #242424;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #10b981;
+        }
+        .metric-label {
+            font-size: 0.7em;
+            color: #888;
+            text-transform: uppercase;
+            margin-top: 3px;
+        }
+        .conversation-entry {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #1a1a1a;
+            border-radius: 10px;
+            border-left: 4px solid #3b82f6;
+            position: relative;
+        }
+        .conversation-entry.complete {
+            border-left-color: #10b981;
+        }
+        .entry-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .entry-lang {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            background: #2a2a2a;
+            border-radius: 15px;
+            font-size: 0.85em;
+        }
+        .entry-time {
+            font-size: 0.75em;
+            color: #666;
+        }
+        .original-text {
+            font-size: 0.95em;
+            color: #888;
+            margin-bottom: 10px;
+            line-height: 1.5;
+            padding: 10px;
+            background: #242424;
+            border-radius: 6px;
+        }
+        .translation-text {
+            font-size: 1.15em;
+            line-height: 1.6;
+            color: #e0e0e0;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+        }
+        .chunk-state {
+            display: inline-block;
+            padding: 2px 8px;
+            margin: 0 2px;
+            background: #333;
+            border-radius: 12px;
+            font-size: 0.7em;
+            text-transform: uppercase;
+        }
+        .chunk-state.pending {
+            background: #374151;
+            color: #9ca3af;
+        }
+        .chunk-state.processing {
+            background: #7c3aed;
+            color: #fff;
+        }
+        .chunk-state.speaking {
+            background: #3b82f6;
+            color: #fff;
+        }
+        .chunk-state.spoken {
+            background: #10b981;
+            color: #fff;
+        }
+        .fingerprint-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 0.65em;
+            color: #666;
+            background: #1a1a1a;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .debug-panel {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 0.8em;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .debug-line {
+            margin: 2px 0;
+            padding: 2px 4px;
+        }
+        .debug-line.info { color: #3b82f6; }
+        .debug-line.success { color: #10b981; }
+        .debug-line.warning { color: #f59e0b; }
+        .debug-line.error { color: #ef4444; }
+        .settings-section {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 8px 0;
+        }
+        .setting-label {
+            font-size: 0.85em;
+            color: #aaa;
+        }
+        .setting-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        input[type="range"] {
+            width: 100px;
+            height: 5px;
+            background: #333;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+        .setting-value {
+            background: #2a2a2a;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            color: #10b981;
+            min-width: 50px;
+            text-align: center;
+        }
+        .error-message {
+            background: #f87171;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .success-message {
+            background: #10b981;
+            color: #064e3b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Zero-Repetition Translation</h1>
+        <p class="subtitle">Guaranteed No Duplicates • Advanced Fingerprinting • State Machine Control</p>
+        
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-dot" id="connectionDot"></div>
+                <span id="connectionStatus">Disconnected</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="receivingDot"></div>
+                <span id="receivingStatus">Not Receiving</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="processingDot"></div>
+                <span id="processingStatus">Idle</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="speakingDot"></div>
+                <span id="speakingStatus">Silent</span>
+            </div>
+        </div>
+        
+        <div class="metrics-grid">
+            <div class="metric-box">
+                <div class="metric-value" id="totalWords">0</div>
+                <div class="metric-label">Total Words</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="uniqueChunks">0</div>
+                <div class="metric-label">Unique Chunks</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="duplicatesPrevented">0</div>
+                <div class="metric-label">Duplicates Blocked</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="fingerprintHits">0</div>
+                <div class="metric-label">Fingerprint Hits</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="latencyMs">--</div>
+                <div class="metric-label">Latency (ms)</div>
+            </div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="control-panel">
+                <h3 style="margin-top: 0; color: #10b981;">Session Control</h3>
+                
+                <div class="session-input">
+                    <input type="text" id="sessionCode" placeholder="Session code" maxlength="4">
+                </div>
+                
+                <h4 style="color: #10b981;">Target Language</h4>
+                <div class="language-selector">
+                    <div class="lang-option active" data-lang="en" onclick="selectLanguage(this)">
+                        🇺🇸 English
+                    </div>
+                    <div class="lang-option" data-lang="fr" onclick="selectLanguage(this)">
+                        🇫🇷 French
+                    </div>
+                    <div class="lang-option" data-lang="es" onclick="selectLanguage(this)">
+                        🇪🇸 Spanish
+                    </div>
+                    <div class="lang-option" data-lang="de" onclick="selectLanguage(this)">
+                        🇩🇪 German
+                    </div>
+                    <div class="lang-option" data-lang="it" onclick="selectLanguage(this)">
+                        🇮🇹 Italian
+                    </div>
+                    <div class="lang-option" data-lang="pt" onclick="selectLanguage(this)">
+                        🇧🇷 Portuguese
+                    </div>
+                    <div class="lang-option" data-lang="zh" onclick="selectLanguage(this)">
+                        🇨🇳 Chinese
+                    </div>
+                    <div class="lang-option" data-lang="ja" onclick="selectLanguage(this)">
+                        🇯🇵 Japanese
+                    </div>
+                    <div class="lang-option" data-lang="ko" onclick="selectLanguage(this)">
+                        🇰🇷 Korean
+                    </div>
+                    <div class="lang-option" data-lang="ar" onclick="selectLanguage(this)">
+                        🇸🇦 Arabic
+                    </div>
+                    <div class="lang-option" data-lang="ru" onclick="selectLanguage(this)">
+                        🇷🇺 Russian
+                    </div>
+                    <div class="lang-option" data-lang="hi" onclick="selectLanguage(this)">
+                        🇮🇳 Hindi
+                    </div>
+                </div>
+                
+                <button id="joinBtn" onclick="joinSession()">Join Session</button>
+                <button id="leaveBtn" onclick="leaveSession()" style="display: none;">Leave Session</button>
+                
+                <div class="settings-section">
+                    <h4 style="margin-top: 0; color: #3b82f6;">Deduplication Settings</h4>
+                    <div class="setting-row">
+                        <span class="setting-label">Min chunk size:</span>
+                        <div class="setting-control">
+                            <input type="range" id="minChunkSize" min="1" max="10" value="3">
+                            <span class="setting-value" id="minChunkSizeValue">3</span>
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Buffer time:</span>
+                        <div class="setting-control">
+                            <input type="range" id="bufferTime" min="200" max="2000" step="100" value="800">
+                            <span class="setting-value" id="bufferTimeValue">0.8s</span>
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Similarity threshold:</span>
+                        <div class="setting-control">
+                            <input type="range" id="similarityThreshold" min="70" max="100" step="5" value="85">
+                            <span class="setting-value" id="similarityThresholdValue">85%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <button onclick="toggleDebug()" style="margin-top: 20px; background: #6366f1;">
+                    Toggle Debug Mode
+                </button>
+            </div>
+            
+            <div class="transcript-panel" id="transcriptPanel">
+                <h3 style="margin-top: 0; color: #10b981;">Conversation Transcript</h3>
+                <div id="conversationDisplay">
+                    <div style="color: #666; text-align: center; margin-top: 50px;">
+                        Join a session to see live translations...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="debug-panel" id="debugPanel" style="display: none;">
+            <div style="color: #666;">Debug output will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3003/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let synthesizer;
+        let socket;
+        let sessionCode;
+        let targetLanguage = 'en';
+        let isConnected = false;
+        let showDebug = false;
+        
+        // Settings
+        let settings = {
+            minChunkSize: 3,
+            bufferTime: 800,
+            similarityThreshold: 85
+        };
+        
+        // Content Fingerprinting System
+        class ContentFingerprinter {
+            constructor() {
+                this.cache = new Map();
+            }
+            
+            normalizeText(text) {
+                return text
+                    .toLowerCase()
+                    .replace(/[.,!?;:'"]/g, '') // Remove punctuation
+                    .replace(/\s+/g, ' ') // Normalize whitespace
+                    .trim();
+            }
+            
+            generateFingerprints(text) {
+                const cacheKey = text;
+                if (this.cache.has(cacheKey)) {
+                    return this.cache.get(cacheKey);
+                }
+                
+                const normalized = this.normalizeText(text);
+                const words = normalized.split(' ').filter(w => w.length > 0);
+                
+                const fingerprints = {
+                    exact: this.hashText(text),
+                    normalized: this.hashText(normalized),
+                    wordSet: this.hashText(words.sort().join(' ')),
+                    structure: this.generateStructureHash(text),
+                    semantic: this.generateSemanticHash(words),
+                    length: text.length,
+                    wordCount: words.length
+                };
+                
+                this.cache.set(cacheKey, fingerprints);
+                return fingerprints;
+            }
+            
+            hashText(text) {
+                let hash = 0;
+                for (let i = 0; i < text.length; i++) {
+                    const char = text.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash;
+                }
+                return hash.toString(36);
+            }
+            
+            generateStructureHash(text) {
+                // Hash based on sentence structure
+                const structure = text
+                    .replace(/[a-z]+/gi, 'W') // Replace words with W
+                    .replace(/[0-9]+/g, 'N') // Replace numbers with N
+                    .replace(/\s+/g, ' ');
+                return this.hashText(structure);
+            }
+            
+            generateSemanticHash(words) {
+                // Simple semantic hashing based on key words
+                const keyWords = words.filter(w => w.length > 4);
+                return this.hashText(keyWords.slice(0, 5).sort().join(''));
+            }
+            
+            calculateSimilarity(text1, text2) {
+                const fp1 = this.generateFingerprints(text1);
+                const fp2 = this.generateFingerprints(text2);
+                
+                let score = 0;
+                let weights = 0;
+                
+                // Exact match
+                if (fp1.exact === fp2.exact) {
+                    return 100;
+                }
+                
+                // Normalized match
+                if (fp1.normalized === fp2.normalized) {
+                    score += 90 * 0.4;
+                    weights += 0.4;
+                } else {
+                    weights += 0.4;
+                }
+                
+                // Word set match
+                if (fp1.wordSet === fp2.wordSet) {
+                    score += 80 * 0.3;
+                    weights += 0.3;
+                } else {
+                    weights += 0.3;
+                }
+                
+                // Structure similarity
+                if (fp1.structure === fp2.structure) {
+                    score += 70 * 0.2;
+                    weights += 0.2;
+                } else {
+                    weights += 0.2;
+                }
+                
+                // Length similarity
+                const lengthRatio = Math.min(fp1.length, fp2.length) / Math.max(fp1.length, fp2.length);
+                score += lengthRatio * 100 * 0.1;
+                weights += 0.1;
+                
+                return weights > 0 ? score / weights : 0;
+            }
+        }
+        
+        // Translation Chunk State Machine
+        class TranslationChunkStateMachine {
+            constructor() {
+                this.chunks = new Map();
+                this.states = {
+                    PENDING: 'pending',
+                    PROCESSING: 'processing',
+                    SPEAKING: 'speaking',
+                    SPOKEN: 'spoken',
+                    SKIPPED: 'skipped'
+                };
+            }
+            
+            createChunk(id, text, sessionId) {
+                const chunk = {
+                    id,
+                    text,
+                    sessionId,
+                    state: this.states.PENDING,
+                    createdAt: Date.now(),
+                    processedAt: null,
+                    spokenAt: null,
+                    fingerprints: null,
+                    transitions: []
+                };
+                
+                this.chunks.set(id, chunk);
+                this.addTransition(id, null, this.states.PENDING);
+                return chunk;
+            }
+            
+            transitionTo(chunkId, newState) {
+                const chunk = this.chunks.get(chunkId);
+                if (!chunk) return false;
+                
+                const oldState = chunk.state;
+                
+                // Validate transition
+                if (!this.isValidTransition(oldState, newState)) {
+                    debugLog(`Invalid transition: ${oldState} -> ${newState}`, 'warning');
+                    return false;
+                }
+                
+                chunk.state = newState;
+                this.addTransition(chunkId, oldState, newState);
+                
+                // Update timestamps
+                if (newState === this.states.PROCESSING) {
+                    chunk.processedAt = Date.now();
+                } else if (newState === this.states.SPOKEN) {
+                    chunk.spokenAt = Date.now();
+                }
+                
+                return true;
+            }
+            
+            isValidTransition(fromState, toState) {
+                const validTransitions = {
+                    [this.states.PENDING]: [this.states.PROCESSING, this.states.SKIPPED],
+                    [this.states.PROCESSING]: [this.states.SPEAKING, this.states.SKIPPED],
+                    [this.states.SPEAKING]: [this.states.SPOKEN],
+                    [this.states.SPOKEN]: [],
+                    [this.states.SKIPPED]: []
+                };
+                
+                return validTransitions[fromState]?.includes(toState) || false;
+            }
+            
+            addTransition(chunkId, fromState, toState) {
+                const chunk = this.chunks.get(chunkId);
+                if (chunk) {
+                    chunk.transitions.push({
+                        from: fromState,
+                        to: toState,
+                        timestamp: Date.now()
+                    });
+                }
+            }
+            
+            getChunksByState(state) {
+                return Array.from(this.chunks.values()).filter(chunk => chunk.state === state);
+            }
+            
+            canSpeak(chunkId) {
+                const chunk = this.chunks.get(chunkId);
+                return chunk && chunk.state === this.states.PROCESSING;
+            }
+            
+            hasBeenSpoken(fingerprints) {
+                for (const chunk of this.chunks.values()) {
+                    if (chunk.state === this.states.SPOKEN && chunk.fingerprints) {
+                        if (chunk.fingerprints.exact === fingerprints.exact ||
+                            chunk.fingerprints.normalized === fingerprints.normalized) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+        }
+        
+        // Synchronization Manager
+        class SynchronizationManager {
+            constructor() {
+                this.fingerprinter = new ContentFingerprinter();
+                this.stateMachine = new TranslationChunkStateMachine();
+                this.processingQueue = [];
+                this.speakingQueue = [];
+                this.bufferTimer = null;
+                this.isProcessing = false;
+                this.isSpeaking = false;
+                this.sessionBuffers = new Map();
+                this.metrics = {
+                    totalWords: 0,
+                    uniqueChunks: 0,
+                    duplicatesPrevented: 0,
+                    fingerprintHits: 0
+                };
+            }
+            
+            async processTranslation(sessionId, original, translation, metadata) {
+                updateProcessingStatus(true);
+                
+                // Additional safety check - empty or invalid translation
+                if (!translation || translation.trim().length === 0) {
+                    debugLog('Empty translation received, skipping', 'warning');
+                    updateProcessingStatus(false);
+                    return;
+                }
+                
+                // Generate fingerprints
+                const fingerprints = this.fingerprinter.generateFingerprints(translation);
+                
+                // Check if already spoken
+                if (this.stateMachine.hasBeenSpoken(fingerprints)) {
+                    this.metrics.duplicatesPrevented++;
+                    this.metrics.fingerprintHits++;
+                    updateMetrics();
+                    debugLog(`Duplicate prevented (exact match): "${translation.substring(0, 50)}..."`, 'warning');
+                    updateProcessingStatus(false);
+                    return;
+                }
+                
+                // Check similarity with existing chunks
+                for (const chunk of this.stateMachine.chunks.values()) {
+                    if (chunk.state !== this.stateMachine.states.SKIPPED && chunk.text) {
+                        const similarity = this.fingerprinter.calculateSimilarity(translation, chunk.text);
+                        if (similarity >= settings.similarityThreshold) {
+                            this.metrics.duplicatesPrevented++;
+                            updateMetrics();
+                            debugLog(`Duplicate prevented (${similarity.toFixed(1)}% similar): "${translation.substring(0, 50)}..."`, 'warning');
+                            updateProcessingStatus(false);
+                            return;
+                        }
+                    }
+                }
+                
+                // Buffer management
+                let buffer = this.sessionBuffers.get(sessionId);
+                if (!buffer) {
+                    buffer = {
+                        sessionId,
+                        chunks: [],
+                        lastUpdate: Date.now()
+                    };
+                    this.sessionBuffers.set(sessionId, buffer);
+                }
+                
+                // Create chunk
+                const chunkId = `${sessionId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const chunk = this.stateMachine.createChunk(chunkId, translation, sessionId);
+                chunk.fingerprints = fingerprints;
+                chunk.original = original;
+                chunk.metadata = metadata;
+                
+                buffer.chunks.push(chunk);
+                buffer.lastUpdate = Date.now();
+                
+                // Clear existing buffer timer
+                if (this.bufferTimer) {
+                    clearTimeout(this.bufferTimer);
+                }
+                
+                // Set new buffer timer
+                this.bufferTimer = setTimeout(() => {
+                    this.flushBuffers();
+                }, metadata.isFinal ? 200 : settings.bufferTime);
+                
+                updateProcessingStatus(false);
+                updateConversationDisplay();
+            }
+            
+            flushBuffers() {
+                for (const [sessionId, buffer] of this.sessionBuffers) {
+                    if (buffer.chunks.length > 0) {
+                        // Process chunks in buffer
+                        for (const chunk of buffer.chunks) {
+                            if (chunk.state === this.stateMachine.states.PENDING) {
+                                const words = chunk.text.split(' ').filter(w => w.length > 0);
+                                if (words.length >= settings.minChunkSize) {
+                                    this.processingQueue.push(chunk);
+                                    this.stateMachine.transitionTo(chunk.id, this.stateMachine.states.PROCESSING);
+                                    this.metrics.uniqueChunks++;
+                                } else {
+                                    this.stateMachine.transitionTo(chunk.id, this.stateMachine.states.SKIPPED);
+                                    debugLog(`Skipped small chunk: "${chunk.text}" (${words.length} words)`, 'info');
+                                }
+                            }
+                        }
+                        
+                        // Clear processed chunks
+                        buffer.chunks = buffer.chunks.filter(c => 
+                            c.state === this.stateMachine.states.PENDING
+                        );
+                    }
+                }
+                
+                updateMetrics();
+                
+                if (!this.isProcessing) {
+                    this.processQueue();
+                }
+            }
+            
+            async processQueue() {
+                if (this.processingQueue.length === 0) {
+                    this.isProcessing = false;
+                    return;
+                }
+                
+                this.isProcessing = true;
+                
+                const chunk = this.processingQueue.shift();
+                
+                // Final duplicate check before speaking
+                if (this.stateMachine.hasBeenSpoken(chunk.fingerprints)) {
+                    this.metrics.duplicatesPrevented++;
+                    updateMetrics();
+                    debugLog(`Late duplicate prevention: "${chunk.text.substring(0, 50)}..."`, 'warning');
+                    setTimeout(() => this.processQueue(), 10);
+                    return;
+                }
+                
+                // Add to speaking queue
+                this.speakingQueue.push(chunk);
+                
+                if (!this.isSpeaking) {
+                    this.speakQueue();
+                }
+                
+                // Continue processing
+                setTimeout(() => this.processQueue(), 50);
+            }
+            
+            async speakQueue() {
+                if (this.speakingQueue.length === 0) {
+                    this.isSpeaking = false;
+                    updateSpeakingStatus(false);
+                    return;
+                }
+                
+                this.isSpeaking = true;
+                updateSpeakingStatus(true);
+                
+                const chunk = this.speakingQueue.shift();
+                
+                // Additional safeguard - verify chunk hasn't been spoken already
+                const chunkState = this.stateMachine.chunks.get(chunk.id);
+                if (chunkState && (chunkState.state === this.stateMachine.states.SPOKEN || 
+                                  chunkState.state === this.stateMachine.states.SPEAKING)) {
+                    debugLog(`Chunk already spoken/speaking, skipping: ${chunk.id}`, 'warning');
+                    setTimeout(() => this.speakQueue(), 50);
+                    return;
+                }
+                
+                // Transition to speaking
+                this.stateMachine.transitionTo(chunk.id, this.stateMachine.states.SPEAKING);
+                updateConversationDisplay();
+                
+                try {
+                    debugLog(`Speaking: "${chunk.text.substring(0, 50)}..."`, 'success');
+                    await this.speak(chunk.text);
+                    
+                    // Mark as spoken
+                    this.stateMachine.transitionTo(chunk.id, this.stateMachine.states.SPOKEN);
+                    
+                    // Update metrics
+                    const words = chunk.text.split(' ').filter(w => w.length > 0);
+                    this.metrics.totalWords += words.length;
+                    updateMetrics();
+                    
+                } catch (error) {
+                    console.error('TTS error:', error);
+                    debugLog(`TTS error: ${error.message}`, 'error');
+                }
+                
+                updateConversationDisplay();
+                
+                // Process next
+                setTimeout(() => this.speakQueue(), 100);
+            }
+            
+            speak(text) {
+                return new Promise((resolve, reject) => {
+                    if (!synthesizer) {
+                        reject('TTS not initialized');
+                        return;
+                    }
+                    
+                    // Additional safeguard - validate text
+                    if (!text || text.trim().length === 0) {
+                        debugLog('Empty text provided to speak function', 'warning');
+                        resolve();
+                        return;
+                    }
+                    
+                    // Ensure we're not trying to speak while already speaking
+                    if (synthesizer.isSpeaking) {
+                        debugLog('TTS already speaking, waiting...', 'warning');
+                        setTimeout(() => {
+                            this.speak(text).then(resolve).catch(reject);
+                        }, 500);
+                        return;
+                    }
+                    
+                    synthesizer.speakTextAsync(
+                        text,
+                        result => {
+                            if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                                debugLog(`TTS completed successfully for: "${text.substring(0, 30)}..."`, 'info');
+                                resolve();
+                            } else {
+                                reject(result.errorDetails);
+                            }
+                        },
+                        error => {
+                            reject(error);
+                        }
+                    );
+                });
+            }
+            
+            reset() {
+                if (this.bufferTimer) {
+                    clearTimeout(this.bufferTimer);
+                }
+                
+                this.processingQueue = [];
+                this.speakingQueue = [];
+                this.sessionBuffers.clear();
+                this.stateMachine.chunks.clear();
+                this.isProcessing = false;
+                this.isSpeaking = false;
+                this.metrics = {
+                    totalWords: 0,
+                    uniqueChunks: 0,
+                    duplicatesPrevented: 0,
+                    fingerprintHits: 0
+                };
+                
+                updateMetrics();
+                updateConversationDisplay();
+            }
+        }
+        
+        // Global Synchronization Manager
+        let syncManager = new SynchronizationManager();
+        
+        // Voice configuration
+        const voiceMap = {
+            'en': 'en-US-JennyNeural',
+            'fr': 'fr-FR-DeniseNeural',
+            'es': 'es-ES-ElviraNeural',
+            'de': 'de-DE-KatjaNeural',
+            'it': 'it-IT-ElsaNeural',
+            'pt': 'pt-BR-FranciscaNeural',
+            'zh': 'zh-CN-XiaoxiaoNeural',
+            'ja': 'ja-JP-NanamiNeural',
+            'ko': 'ko-KR-SunHiNeural',
+            'ar': 'ar-SA-ZariyahNeural',
+            'ru': 'ru-RU-SvetlanaNeural',
+            'hi': 'hi-IN-SwaraNeural'
+        };
+        
+        // Language display names
+        const languageNames = {
+            'en': '🇺🇸 English',
+            'fr': '🇫🇷 French',
+            'es': '🇪🇸 Spanish',
+            'de': '🇩🇪 German',
+            'it': '🇮🇹 Italian',
+            'pt': '🇧🇷 Portuguese',
+            'zh': '🇨🇳 Chinese',
+            'ja': '🇯🇵 Japanese',
+            'ko': '🇰🇷 Korean',
+            'ar': '🇸🇦 Arabic',
+            'ru': '🇷🇺 Russian',
+            'hi': '🇮🇳 Hindi'
+        };
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            Initialize(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                initializeSocket();
+                initializeSettings();
+                
+                // Check for session code in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlSession = urlParams.get('session');
+                if (urlSession) {
+                    document.getElementById('sessionCode').value = urlSession.toUpperCase();
+                }
+            });
+        });
+        
+        function Initialize(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+        
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                updateConnectionStatus(true);
+            });
+            
+            socket.on('disconnect', () => {
+                updateConnectionStatus(false);
+                isConnected = false;
+            });
+            
+            socket.on('session-not-found', () => {
+                showError('Session not found. Please check the code.');
+                isConnected = false;
+            });
+            
+            socket.on('session-joined', (data) => {
+                console.log('Successfully joined session:', data);
+            });
+            
+            socket.on('speaker-disconnected', () => {
+                showError('Speaker has disconnected');
+                syncManager.reset();
+            });
+            
+            // Handle all translation events
+            socket.on('translation-data', handleTranslation);
+            socket.on('translation-data-ultra', handleTranslation);
+        }
+        
+        function initializeSettings() {
+            // Min chunk size
+            const minChunkSize = document.getElementById('minChunkSize');
+            minChunkSize.addEventListener('input', (e) => {
+                settings.minChunkSize = parseInt(e.target.value);
+                document.getElementById('minChunkSizeValue').textContent = e.target.value;
+            });
+            
+            // Buffer time
+            const bufferTime = document.getElementById('bufferTime');
+            bufferTime.addEventListener('input', (e) => {
+                settings.bufferTime = parseInt(e.target.value);
+                document.getElementById('bufferTimeValue').textContent = (e.target.value / 1000).toFixed(1) + 's';
+            });
+            
+            // Similarity threshold
+            const similarityThreshold = document.getElementById('similarityThreshold');
+            similarityThreshold.addEventListener('input', (e) => {
+                settings.similarityThreshold = parseInt(e.target.value);
+                document.getElementById('similarityThresholdValue').textContent = e.target.value + '%';
+            });
+        }
+        
+        function selectLanguage(element) {
+            document.querySelectorAll('.lang-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            element.classList.add('active');
+            targetLanguage = element.dataset.lang;
+        }
+        
+        async function joinSession() {
+            const code = document.getElementById('sessionCode').value.trim().toUpperCase();
+            if (code.length !== 4) {
+                showError('Please enter a 4-character session code');
+                return;
+            }
+            
+            sessionCode = code;
+            
+            // Initialize TTS
+            try {
+                await initializeTTS();
+            } catch (error) {
+                showError('Failed to initialize text-to-speech');
+                return;
+            }
+            
+            // Join session
+            socket.emit('listener-join', {
+                sessionCode: sessionCode,
+                targetLanguage: targetLanguage
+            });
+            
+            isConnected = true;
+            
+            // Update UI
+            document.getElementById('joinBtn').style.display = 'none';
+            document.getElementById('leaveBtn').style.display = 'block';
+            document.getElementById('sessionCode').disabled = true;
+            document.querySelectorAll('.lang-option').forEach(opt => {
+                opt.style.pointerEvents = 'none';
+            });
+            
+            showSuccess(`Joined session ${sessionCode} with ${languageNames[targetLanguage]} as target language`);
+            clearTranscript();
+        }
+        
+        function leaveSession() {
+            if (sessionCode) {
+                socket.emit('listener-leave', { sessionCode });
+            }
+            
+            isConnected = false;
+            sessionCode = null;
+            
+            // Clean up TTS
+            if (synthesizer) {
+                synthesizer.close();
+                synthesizer = null;
+            }
+            
+            // Reset manager
+            syncManager.reset();
+            
+            // Update UI
+            document.getElementById('joinBtn').style.display = 'block';
+            document.getElementById('leaveBtn').style.display = 'none';
+            document.getElementById('sessionCode').disabled = false;
+            document.getElementById('sessionCode').value = '';
+            document.querySelectorAll('.lang-option').forEach(opt => {
+                opt.style.pointerEvents = 'auto';
+            });
+            
+            clearTranscript();
+        }
+        
+        async function initializeTTS() {
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    serviceRegion
+                );
+                
+                // Set voice based on target language
+                const selectedVoice = voiceMap[targetLanguage] || 'en-US-JennyNeural';
+                speechConfig.speechSynthesisVoiceName = selectedVoice;
+                
+                // Set output format for better quality
+                speechConfig.speechSynthesisOutputFormat = SpeechSDK.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+                
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultSpeakerOutput();
+                synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig, audioConfig);
+            } catch (error) {
+                throw error;
+            }
+        }
+        
+        function handleTranslation(data) {
+            if (!isConnected || !data.translation || data.translation === data.original) {
+                return;
+            }
+            
+            // Update receiving status
+            updateReceivingStatus(true);
+            setTimeout(() => updateReceivingStatus(false), 500);
+            
+            // Create session ID
+            const sessionId = `${data.sourceLanguage}-${Math.floor(data.timestamp / 30000)}`;
+            
+            // Process translation
+            syncManager.processTranslation(
+                sessionId,
+                data.original,
+                data.translation,
+                {
+                    isFinal: data.isFinal,
+                    confidence: data.confidence || 0.9,
+                    timestamp: data.timestamp,
+                    sourceLanguage: data.sourceLanguage
+                }
+            );
+            
+            // Update latency
+            document.getElementById('latencyMs').textContent = data.latency || Math.floor(Date.now() - data.timestamp);
+        }
+        
+        function updateConversationDisplay() {
+            const display = document.getElementById('conversationDisplay');
+            
+            // Clear placeholder if needed
+            if (display.querySelector('div[style*="color: #666"]')) {
+                display.innerHTML = '';
+            }
+            
+            // Group chunks by session
+            const sessionGroups = new Map();
+            for (const [chunkId, chunk] of syncManager.stateMachine.chunks) {
+                const sessionId = chunk.sessionId;
+                if (!sessionGroups.has(sessionId)) {
+                    sessionGroups.set(sessionId, []);
+                }
+                sessionGroups.get(sessionId).push(chunk);
+            }
+            
+            // Clear and rebuild display
+            display.innerHTML = '';
+            
+            for (const [sessionId, chunks] of sessionGroups) {
+                // Sort chunks by creation time
+                chunks.sort((a, b) => a.createdAt - b.createdAt);
+                
+                // Get latest chunk for display
+                const latestChunk = chunks[chunks.length - 1];
+                
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'conversation-entry';
+                if (chunks.every(c => c.state === syncManager.stateMachine.states.SPOKEN)) {
+                    entryDiv.classList.add('complete');
+                }
+                
+                const sourceLang = latestChunk.metadata?.sourceLanguage?.split('-')[0] || 'unknown';
+                const targetLang = targetLanguage;
+                
+                // Show fingerprint info
+                const fpInfo = latestChunk.fingerprints ? 
+                    `FP: ${latestChunk.fingerprints.normalized.substring(0, 8)}` : '';
+                
+                entryDiv.innerHTML = `
+                    <div class="fingerprint-info">${fpInfo}</div>
+                    <div class="entry-header">
+                        <span class="entry-lang">
+                            ${languageNames[sourceLang] || sourceLang} → ${languageNames[targetLang] || targetLang}
+                        </span>
+                        <span class="entry-time">${new Date(latestChunk.createdAt).toLocaleTimeString()}</span>
+                    </div>
+                    <div class="original-text">${latestChunk.original || ''}</div>
+                    <div class="translation-text">
+                        ${chunks.map(chunk => {
+                            const stateClass = chunk.state.replace('_', '-');
+                            return `<span class="chunk-state ${stateClass}">${chunk.text}</span>`;
+                        }).join(' ')}
+                    </div>
+                `;
+                
+                display.appendChild(entryDiv);
+            }
+            
+            // Keep only recent entries
+            const entries = display.querySelectorAll('.conversation-entry');
+            if (entries.length > 20) {
+                entries[0].remove();
+            }
+            
+            display.scrollTop = display.scrollHeight;
+        }
+        
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('connectionDot');
+            const status = document.getElementById('connectionStatus');
+            
+            if (connected) {
+                dot.classList.add('active');
+                status.textContent = 'Connected';
+            } else {
+                dot.classList.remove('active');
+                status.textContent = 'Disconnected';
+            }
+        }
+        
+        function updateReceivingStatus(receiving) {
+            const dot = document.getElementById('receivingDot');
+            const status = document.getElementById('receivingStatus');
+            
+            if (receiving) {
+                dot.classList.add('active');
+                status.textContent = 'Receiving';
+            } else {
+                dot.classList.remove('active');
+                status.textContent = 'Waiting...';
+            }
+        }
+        
+        function updateProcessingStatus(processing) {
+            const dot = document.getElementById('processingDot');
+            const status = document.getElementById('processingStatus');
+            
+            if (processing) {
+                dot.classList.add('processing');
+                status.textContent = 'Processing';
+            } else {
+                dot.classList.remove('processing');
+                status.textContent = 'Idle';
+            }
+        }
+        
+        function updateSpeakingStatus(speaking) {
+            const dot = document.getElementById('speakingDot');
+            const status = document.getElementById('speakingStatus');
+            
+            if (speaking) {
+                dot.classList.add('speaking');
+                status.textContent = 'Speaking';
+            } else {
+                dot.classList.remove('speaking');
+                status.textContent = 'Silent';
+            }
+        }
+        
+        function updateMetrics() {
+            document.getElementById('totalWords').textContent = syncManager.metrics.totalWords;
+            document.getElementById('uniqueChunks').textContent = syncManager.metrics.uniqueChunks;
+            document.getElementById('duplicatesPrevented').textContent = syncManager.metrics.duplicatesPrevented;
+            document.getElementById('fingerprintHits').textContent = syncManager.metrics.fingerprintHits;
+        }
+        
+        function clearTranscript() {
+            syncManager.stateMachine.chunks.clear();
+            const display = document.getElementById('conversationDisplay');
+            if (isConnected) {
+                display.innerHTML = '<div style="color: #666; text-align: center; margin-top: 50px;">Waiting for speaker...</div>';
+            } else {
+                display.innerHTML = '<div style="color: #666; text-align: center; margin-top: 50px;">Join a session to see live translations...</div>';
+            }
+        }
+        
+        function toggleDebug() {
+            showDebug = !showDebug;
+            document.getElementById('debugPanel').style.display = showDebug ? 'block' : 'none';
+        }
+        
+        function debugLog(message, type = 'info') {
+            if (!showDebug) return;
+            
+            const debugPanel = document.getElementById('debugPanel');
+            const line = document.createElement('div');
+            line.className = `debug-line ${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            
+            // Clear placeholder
+            if (debugPanel.querySelector('div[style*="color: #666"]')) {
+                debugPanel.innerHTML = '';
+            }
+            
+            debugPanel.appendChild(line);
+            
+            // Keep only last 50 lines
+            const lines = debugPanel.querySelectorAll('.debug-line');
+            if (lines.length > 50) {
+                lines[0].remove();
+            }
+            
+            debugPanel.scrollTop = debugPanel.scrollHeight;
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

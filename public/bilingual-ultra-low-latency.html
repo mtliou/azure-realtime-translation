@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Ultra-Low Latency Bilingual Translation - FR-CA/EN</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #000;
+            color: #fff;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        h1 {
+            font-size: 2.5em;
+            margin: 0;
+            background: linear-gradient(45deg, #ff0066, #00ffcc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            color: #888;
+            margin-top: 10px;
+        }
+        .latency-display {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #111;
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: 2px solid #333;
+        }
+        .latency-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #00ff00;
+        }
+        .latency-value.warning { color: #ffaa00; }
+        .latency-value.critical { color: #ff0044; }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 350px 1fr 350px;
+            gap: 20px;
+        }
+        
+        .control-panel {
+            background: #111;
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid #333;
+        }
+        .control-panel h2 {
+            margin-top: 0;
+            color: #00ffcc;
+            font-size: 1.3em;
+        }
+        
+        .language-detector {
+            background: #0a0a0a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .detected-language {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .lang-fr { color: #0066ff; }
+        .lang-en { color: #ff6600; }
+        .confidence-bar {
+            height: 8px;
+            background: #222;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff0066, #00ffcc);
+            transition: width 0.2s;
+        }
+        
+        .settings-group {
+            margin: 20px 0;
+        }
+        .settings-group h3 {
+            color: #888;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        
+        select, button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+        }
+        select:focus, button:focus {
+            outline: none;
+            border-color: #00ffcc;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #ff0066, #00ffcc);
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(255, 0, 102, 0.5);
+        }
+        button:disabled {
+            background: #333;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        .central-display {
+            background: #0a0a0a;
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid #333;
+        }
+        
+        .waveform-container {
+            height: 200px;
+            background: #000;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+        .waveform-canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .translation-streams {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .stream-box {
+            background: #111;
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .stream-box h3 {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .stream-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #444;
+        }
+        .stream-indicator.active { 
+            background: #00ff00;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .transcript-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: #1a1a1a;
+            border-radius: 8px;
+            border-left: 3px solid #333;
+            transition: all 0.3s;
+        }
+        .transcript-item.source { border-left-color: #ff0066; }
+        .transcript-item.translation { border-left-color: #00ffcc; }
+        .transcript-item.partial { opacity: 0.7; }
+        
+        .metrics-panel {
+            background: #111;
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid #333;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .metric-box {
+            background: #0a0a0a;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #00ffcc;
+        }
+        .metric-label {
+            font-size: 0.8em;
+            color: #666;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        
+        .optimization-controls {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+        .optimization-controls h3 {
+            color: #00ffcc;
+            margin-bottom: 15px;
+        }
+        .toggle-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toggle-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            background: #0a0a0a;
+            border-radius: 8px;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #333;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #00ffcc;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+        
+        .performance-graph {
+            margin-top: 20px;
+            height: 150px;
+            background: #0a0a0a;
+            border-radius: 10px;
+            padding: 15px;
+            position: relative;
+        }
+        .graph-canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .listeners-display {
+            margin-top: 20px;
+            padding: 15px;
+            background: #0a0a0a;
+            border-radius: 10px;
+        }
+        .listener-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: #111;
+            border-radius: 6px;
+        }
+        .listener-lang {
+            padding: 4px 12px;
+            background: #222;
+            border-radius: 20px;
+            font-size: 0.85em;
+        }
+        
+        .warning-banner {
+            background: #ff6600;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚡ Ultra-Low Latency Bilingual Translation</h1>
+        <p class="subtitle">Automatic French Canadian / English Detection • Sub-200ms Latency</p>
+        <div class="latency-display">
+            <div class="latency-value" id="totalLatency">--</div>
+            <div style="font-size: 0.8em; color: #666;">Total Latency (ms)</div>
+        </div>
+    </div>
+    
+    <div class="warning-banner" id="warningBanner"></div>
+    
+    <div class="main-grid">
+        <div class="control-panel">
+            <h2>Host Controls</h2>
+            
+            <div class="language-detector">
+                <div style="color: #666; font-size: 0.9em;">Detected Language</div>
+                <div class="detected-language" id="detectedLanguage">--</div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
+                </div>
+                <div style="color: #666; font-size: 0.85em;">
+                    Confidence: <span id="confidenceValue">0%</span>
+                </div>
+            </div>
+            
+            <div class="settings-group">
+                <h3>Session Settings</h3>
+                <input type="text" id="sessionCode" placeholder="Session Code" readonly 
+                       style="font-size: 1.5em; text-align: center; letter-spacing: 5px;">
+                <button id="generateCode" onclick="generateSessionCode()">
+                    Generate New Code
+                </button>
+            </div>
+            
+            <button id="startBtn" onclick="startUltraLowLatency()">
+                🚀 Start Broadcasting
+            </button>
+            <button id="stopBtn" onclick="stopBroadcasting()" disabled>
+                ⏹️ Stop Broadcasting
+            </button>
+            
+            <div class="optimization-controls">
+                <h3>Performance Optimizations</h3>
+                <div class="toggle-group">
+                    <div class="toggle-item">
+                        <span>Phrase Caching</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="phraseCache" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-item">
+                        <span>Predictive Synthesis</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="predictiveSynth" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-item">
+                        <span>Dual Recognition</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="dualRecognition" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-item">
+                        <span>Hardware Acceleration</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="hwAcceleration" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="central-display">
+            <div class="waveform-container">
+                <canvas class="waveform-canvas" id="waveformCanvas"></canvas>
+            </div>
+            
+            <div class="translation-streams">
+                <div class="stream-box">
+                    <h3>
+                        <span class="stream-indicator" id="sourceIndicator"></span>
+                        <span>Source Speech</span>
+                    </h3>
+                    <div id="sourceTranscript"></div>
+                </div>
+                <div class="stream-box">
+                    <h3>
+                        <span class="stream-indicator" id="translationIndicator"></span>
+                        <span>Live Translations</span>
+                    </h3>
+                    <div id="translationOutput"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="metrics-panel">
+            <h2>Performance Metrics</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-box">
+                    <div class="metric-value" id="sttLatency">--</div>
+                    <div class="metric-label">STT Latency</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value" id="translationLatency">--</div>
+                    <div class="metric-label">Translation</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value" id="ttsLatency">--</div>
+                    <div class="metric-label">TTS Latency</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value" id="networkLatency">--</div>
+                    <div class="metric-label">Network</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value" id="cacheHitRate">0%</div>
+                    <div class="metric-label">Cache Hits</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value" id="throughput">0</div>
+                    <div class="metric-label">Words/Sec</div>
+                </div>
+            </div>
+            
+            <div class="performance-graph">
+                <canvas class="graph-canvas" id="performanceGraph"></canvas>
+            </div>
+            
+            <div class="listeners-display">
+                <h3 style="color: #00ffcc; margin-top: 0;">Active Listeners</h3>
+                <div id="listenersList">
+                    <div style="color: #666; text-align: center;">No listeners connected</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3003/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let socket;
+        
+        // Recognition streams
+        let frenchRecognizer;
+        let englishRecognizer;
+        let currentLanguage = null;
+        let isRecognizing = false;
+        
+        // Performance tracking
+        let metrics = {
+            sttStart: 0,
+            translationStart: 0,
+            ttsStart: 0,
+            totalStart: 0,
+            cacheHits: 0,
+            cacheAttempts: 0,
+            wordCount: 0,
+            startTime: 0
+        };
+        
+        // Caching
+        const phraseCache = new Map();
+        const audioCache = new Map();
+        
+        // Audio visualization
+        let audioContext;
+        let analyser;
+        let waveformCanvas;
+        let waveformCtx;
+        let performanceCanvas;
+        let performanceCtx;
+        let latencyHistory = [];
+        
+        // Language detection
+        let languageBuffer = [];
+        let languageScores = { 'fr-CA': 0, 'en-CA': 0 };
+        let lastLanguageSwitch = 0;
+        const LANGUAGE_SWITCH_THRESHOLD = 0.85;
+        const LANGUAGE_HYSTERESIS = 300; // ms
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            Initialize(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                initializeSocket();
+                initializeAudioVisualization();
+                generateSessionCode();
+            });
+        });
+        
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                console.log('Connected to WebSocket server');
+            });
+            
+            socket.on('listener-joined', (data) => {
+                updateListenersDisplay();
+            });
+            
+            socket.on('listener-left', (data) => {
+                updateListenersDisplay();
+            });
+        }
+        
+        function initializeAudioVisualization() {
+            // Waveform canvas
+            waveformCanvas = document.getElementById('waveformCanvas');
+            waveformCtx = waveformCanvas.getContext('2d');
+            waveformCanvas.width = waveformCanvas.offsetWidth;
+            waveformCanvas.height = waveformCanvas.offsetHeight;
+            
+            // Performance graph canvas
+            performanceCanvas = document.getElementById('performanceGraph');
+            performanceCtx = performanceCanvas.getContext('2d');
+            performanceCanvas.width = performanceCanvas.offsetWidth;
+            performanceCanvas.height = performanceCanvas.offsetHeight;
+            
+            // Start animation loops
+            drawWaveform();
+            drawPerformanceGraph();
+        }
+        
+        function generateSessionCode() {
+            const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+            document.getElementById('sessionCode').value = code;
+        }
+        
+        async function RequestAuthorizationToken() {
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                return res.data.region;
+            } catch (err) {
+                showWarning('Failed to get authorization token');
+                throw err;
+            }
+        }
+        
+        async function startUltraLowLatency() {
+            try {
+                metrics.startTime = Date.now();
+                await RequestAuthorizationToken();
+                
+                // Start audio context for visualization
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                
+                // Get microphone input
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000
+                    } 
+                });
+                
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+                
+                // Initialize dual recognition streams
+                if (document.getElementById('dualRecognition').checked) {
+                    await initializeDualRecognition();
+                } else {
+                    await initializeSingleRecognition();
+                }
+                
+                // Join WebSocket room
+                const sessionCode = document.getElementById('sessionCode').value;
+                socket.emit('speaker-join', { 
+                    sessionCode, 
+                    sourceLanguage: 'bilingual-fr-en' 
+                });
+                
+                // Update UI
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('sourceIndicator').classList.add('active');
+                
+                isRecognizing = true;
+                
+            } catch (error) {
+                showWarning('Failed to start: ' + error.message);
+                console.error(error);
+            }
+        }
+        
+        async function initializeDualRecognition() {
+            // French Canadian recognizer
+            const frenchConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                authorizationToken, 
+                serviceRegion
+            );
+            frenchConfig.speechRecognitionLanguage = 'fr-CA';
+            frenchConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+            frenchConfig.setProperty(
+                SpeechSDK.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority,
+                "Latency"
+            );
+            
+            // English recognizer
+            const englishConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                authorizationToken, 
+                serviceRegion
+            );
+            englishConfig.speechRecognitionLanguage = 'en-CA';
+            englishConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+            englishConfig.setProperty(
+                SpeechSDK.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority,
+                "Latency"
+            );
+            
+            const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+            
+            frenchRecognizer = new SpeechSDK.SpeechRecognizer(frenchConfig, audioConfig);
+            englishRecognizer = new SpeechSDK.SpeechRecognizer(englishConfig, audioConfig);
+            
+            // Set up parallel recognition
+            setupDualRecognitionHandlers();
+            
+            // Start both recognizers
+            frenchRecognizer.startContinuousRecognitionAsync();
+            englishRecognizer.startContinuousRecognitionAsync();
+        }
+        
+        function setupDualRecognitionHandlers() {
+            // French recognizer handlers
+            frenchRecognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
+                    processRecognitionResult(e.result, 'fr-CA', false);
+                }
+            };
+            
+            frenchRecognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                    processRecognitionResult(e.result, 'fr-CA', true);
+                }
+            };
+            
+            // English recognizer handlers
+            englishRecognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
+                    processRecognitionResult(e.result, 'en-CA', false);
+                }
+            };
+            
+            englishRecognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                    processRecognitionResult(e.result, 'en-CA', true);
+                }
+            };
+        }
+        
+        function processRecognitionResult(result, language, isFinal) {
+            const confidence = result.confidence || 0.9;
+            
+            // Update language scores
+            languageScores[language] = confidence;
+            
+            // Determine active language with hysteresis
+            const timeSinceSwitch = Date.now() - lastLanguageSwitch;
+            const threshold = timeSinceSwitch < LANGUAGE_HYSTERESIS 
+                ? LANGUAGE_SWITCH_THRESHOLD + 0.1 
+                : LANGUAGE_SWITCH_THRESHOLD;
+            
+            if (confidence > threshold && confidence > languageScores[language === 'fr-CA' ? 'en-CA' : 'fr-CA']) {
+                if (currentLanguage !== language) {
+                    currentLanguage = language;
+                    lastLanguageSwitch = Date.now();
+                    updateLanguageDisplay(language, confidence);
+                }
+                
+                // Process the result
+                const text = result.text;
+                if (text) {
+                    metrics.sttStart = Date.now();
+                    
+                    // Update source transcript
+                    updateSourceTranscript(text, language, isFinal);
+                    
+                    // Send for translation
+                    sendForTranslation(text, language, isFinal);
+                    
+                    // Update metrics
+                    const sttLatency = Date.now() - metrics.sttStart;
+                    document.getElementById('sttLatency').textContent = sttLatency;
+                    
+                    if (isFinal) {
+                        metrics.wordCount += text.split(' ').length;
+                        updateThroughput();
+                    }
+                }
+            }
+        }
+        
+        function updateLanguageDisplay(language, confidence) {
+            const display = document.getElementById('detectedLanguage');
+            display.textContent = language === 'fr-CA' ? 'Français' : 'English';
+            display.className = 'detected-language ' + (language === 'fr-CA' ? 'lang-fr' : 'lang-en');
+            
+            const confidencePercent = Math.round(confidence * 100);
+            document.getElementById('confidenceValue').textContent = confidencePercent + '%';
+            document.getElementById('confidenceFill').style.width = confidencePercent + '%';
+        }
+        
+        function updateSourceTranscript(text, language, isFinal) {
+            const transcript = document.getElementById('sourceTranscript');
+            
+            if (isFinal) {
+                // Remove any partial elements
+                const partials = transcript.querySelectorAll('.partial');
+                partials.forEach(p => p.remove());
+                
+                // Add final transcript
+                const item = document.createElement('div');
+                item.className = 'transcript-item source';
+                item.innerHTML = `
+                    <div style="font-size: 0.8em; color: #666;">
+                        ${new Date().toLocaleTimeString()} • ${language}
+                    </div>
+                    <div>${text}</div>
+                `;
+                transcript.appendChild(item);
+            } else {
+                // Update or create partial
+                let partial = transcript.querySelector('.partial');
+                if (!partial) {
+                    partial = document.createElement('div');
+                    partial.className = 'transcript-item source partial';
+                    transcript.appendChild(partial);
+                }
+                partial.innerHTML = `
+                    <div style="font-size: 0.8em; color: #666;">
+                        ${language} • recognizing...
+                    </div>
+                    <div>${text}</div>
+                `;
+            }
+            
+            // Auto-scroll
+            transcript.scrollTop = transcript.scrollHeight;
+        }
+        
+        async function sendForTranslation(text, sourceLanguage, isFinal) {
+            metrics.translationStart = Date.now();
+            
+            const sessionCode = document.getElementById('sessionCode').value;
+            
+            // Check phrase cache if enabled
+            if (document.getElementById('phraseCache').checked) {
+                const cacheKey = `${text}:${sourceLanguage}`;
+                const cached = phraseCache.get(cacheKey);
+                if (cached) {
+                    metrics.cacheHits++;
+                    metrics.cacheAttempts++;
+                    updateCacheHitRate();
+                    
+                    // Send cached translation
+                    socket.emit(isFinal ? 'speech-final' : 'speech-partial', {
+                        sessionCode,
+                        text: text,
+                        sourceLanguage: sourceLanguage,
+                        timestamp: Date.now(),
+                        cached: true
+                    });
+                    
+                    updateTranslationLatency(5); // Cache hit = 5ms
+                    return;
+                }
+                metrics.cacheAttempts++;
+            }
+            
+            // Send for translation
+            socket.emit(isFinal ? 'speech-final-ultra' : 'speech-partial-ultra', {
+                sessionCode,
+                text: text,
+                sourceLanguage: sourceLanguage,
+                timestamp: Date.now(),
+                confidence: languageScores[sourceLanguage]
+            });
+            
+            // Simulate receiving translation for display
+            if (isFinal) {
+                setTimeout(() => {
+                    displayTranslation(text, sourceLanguage);
+                    updateTranslationLatency();
+                }, 50);
+            }
+        }
+        
+        function displayTranslation(originalText, sourceLanguage) {
+            const output = document.getElementById('translationOutput');
+            document.getElementById('translationIndicator').classList.add('active');
+            
+            // Simulated translations for demo
+            const translations = {
+                'en': '🇬🇧 English: ' + originalText,
+                'es': '🇪🇸 Spanish: ' + translateToSpanish(originalText),
+                'de': '🇩🇪 German: ' + translateToGerman(originalText),
+                'zh': '🇨🇳 Chinese: ' + translateToChinese(originalText)
+            };
+            
+            const item = document.createElement('div');
+            item.className = 'transcript-item translation';
+            item.innerHTML = `
+                <div style="font-size: 0.8em; color: #666;">
+                    ${new Date().toLocaleTimeString()} • From ${sourceLanguage}
+                </div>
+                <div>${Object.values(translations).join('<br>')}</div>
+            `;
+            output.appendChild(item);
+            output.scrollTop = output.scrollHeight;
+            
+            // Update total latency
+            updateTotalLatency();
+            
+            setTimeout(() => {
+                document.getElementById('translationIndicator').classList.remove('active');
+            }, 500);
+        }
+        
+        // Simplified translation functions for demo
+        function translateToSpanish(text) {
+            const simple = {
+                'hello': 'hola',
+                'good morning': 'buenos días',
+                'thank you': 'gracias',
+                'how are you': 'cómo estás'
+            };
+            return simple[text.toLowerCase()] || `[ES] ${text}`;
+        }
+        
+        function translateToGerman(text) {
+            const simple = {
+                'hello': 'hallo',
+                'good morning': 'guten Morgen',
+                'thank you': 'danke',
+                'how are you': 'wie geht es dir'
+            };
+            return simple[text.toLowerCase()] || `[DE] ${text}`;
+        }
+        
+        function translateToChinese(text) {
+            const simple = {
+                'hello': '你好',
+                'good morning': '早上好',
+                'thank you': '谢谢',
+                'how are you': '你好吗'
+            };
+            return simple[text.toLowerCase()] || `[ZH] ${text}`;
+        }
+        
+        function updateTranslationLatency(latency) {
+            const translationLatency = latency || (Date.now() - metrics.translationStart);
+            document.getElementById('translationLatency').textContent = translationLatency;
+        }
+        
+        function updateTotalLatency() {
+            const total = parseInt(document.getElementById('sttLatency').textContent || 0) +
+                         parseInt(document.getElementById('translationLatency').textContent || 0) +
+                         parseInt(document.getElementById('ttsLatency').textContent || 50) +
+                         parseInt(document.getElementById('networkLatency').textContent || 20);
+            
+            const display = document.getElementById('totalLatency');
+            display.textContent = total;
+            
+            // Update color based on latency
+            if (total < 200) {
+                display.className = 'latency-value';
+            } else if (total < 300) {
+                display.className = 'latency-value warning';
+            } else {
+                display.className = 'latency-value critical';
+            }
+            
+            // Add to history for graph
+            latencyHistory.push({ time: Date.now(), value: total });
+            if (latencyHistory.length > 100) latencyHistory.shift();
+        }
+        
+        function updateCacheHitRate() {
+            if (metrics.cacheAttempts > 0) {
+                const hitRate = Math.round((metrics.cacheHits / metrics.cacheAttempts) * 100);
+                document.getElementById('cacheHitRate').textContent = hitRate + '%';
+            }
+        }
+        
+        function updateThroughput() {
+            if (metrics.startTime) {
+                const elapsed = (Date.now() - metrics.startTime) / 1000; // seconds
+                const wordsPerSecond = Math.round(metrics.wordCount / elapsed);
+                document.getElementById('throughput').textContent = wordsPerSecond;
+            }
+        }
+        
+        function drawWaveform() {
+            if (!analyser || !isRecognizing) {
+                requestAnimationFrame(drawWaveform);
+                return;
+            }
+            
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteTimeDomainData(dataArray);
+            
+            waveformCtx.fillStyle = 'rgb(0, 0, 0)';
+            waveformCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+            
+            waveformCtx.lineWidth = 2;
+            waveformCtx.strokeStyle = currentLanguage === 'fr-CA' ? 'rgb(0, 102, 255)' : 'rgb(255, 102, 0)';
+            waveformCtx.beginPath();
+            
+            const sliceWidth = waveformCanvas.width / bufferLength;
+            let x = 0;
+            
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * waveformCanvas.height / 2;
+                
+                if (i === 0) {
+                    waveformCtx.moveTo(x, y);
+                } else {
+                    waveformCtx.lineTo(x, y);
+                }
+                
+                x += sliceWidth;
+            }
+            
+            waveformCtx.lineTo(waveformCanvas.width, waveformCanvas.height / 2);
+            waveformCtx.stroke();
+            
+            requestAnimationFrame(drawWaveform);
+        }
+        
+        function drawPerformanceGraph() {
+            performanceCtx.fillStyle = 'rgb(10, 10, 10)';
+            performanceCtx.fillRect(0, 0, performanceCanvas.width, performanceCanvas.height);
+            
+            if (latencyHistory.length > 1) {
+                // Draw grid lines
+                performanceCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                performanceCtx.lineWidth = 1;
+                
+                // Horizontal lines at 100ms intervals
+                for (let y = 0; y < performanceCanvas.height; y += performanceCanvas.height / 5) {
+                    performanceCtx.beginPath();
+                    performanceCtx.moveTo(0, y);
+                    performanceCtx.lineTo(performanceCanvas.width, y);
+                    performanceCtx.stroke();
+                }
+                
+                // Draw latency line
+                performanceCtx.strokeStyle = 'rgb(0, 255, 204)';
+                performanceCtx.lineWidth = 2;
+                performanceCtx.beginPath();
+                
+                const xStep = performanceCanvas.width / 100;
+                const maxLatency = 500;
+                
+                latencyHistory.forEach((point, index) => {
+                    const x = index * xStep;
+                    const y = performanceCanvas.height - (point.value / maxLatency * performanceCanvas.height);
+                    
+                    if (index === 0) {
+                        performanceCtx.moveTo(x, y);
+                    } else {
+                        performanceCtx.lineTo(x, y);
+                    }
+                });
+                
+                performanceCtx.stroke();
+                
+                // Draw 200ms target line
+                performanceCtx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+                performanceCtx.lineWidth = 1;
+                performanceCtx.setLineDash([5, 5]);
+                performanceCtx.beginPath();
+                const targetY = performanceCanvas.height - (200 / maxLatency * performanceCanvas.height);
+                performanceCtx.moveTo(0, targetY);
+                performanceCtx.lineTo(performanceCanvas.width, targetY);
+                performanceCtx.stroke();
+                performanceCtx.setLineDash([]);
+            }
+            
+            requestAnimationFrame(drawPerformanceGraph);
+        }
+        
+        function updateListenersDisplay() {
+            // This would be populated by WebSocket data
+            const list = document.getElementById('listenersList');
+            // Implementation depends on listener data structure
+        }
+        
+        function stopBroadcasting() {
+            isRecognizing = false;
+            
+            if (frenchRecognizer) {
+                frenchRecognizer.stopContinuousRecognitionAsync();
+                frenchRecognizer.close();
+                frenchRecognizer = undefined;
+            }
+            
+            if (englishRecognizer) {
+                englishRecognizer.stopContinuousRecognitionAsync();
+                englishRecognizer.close();
+                englishRecognizer = undefined;
+            }
+            
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            // Update UI
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('sourceIndicator').classList.remove('active');
+            document.getElementById('detectedLanguage').textContent = '--';
+            
+            // Leave WebSocket room
+            const sessionCode = document.getElementById('sessionCode').value;
+            socket.emit('speaker-stop', { sessionCode });
+        }
+        
+        function showWarning(message) {
+            const banner = document.getElementById('warningBanner');
+            banner.textContent = message;
+            banner.style.display = 'block';
+            setTimeout(() => banner.style.display = 'none', 5000);
+        }
+        
+        // SDK initialization
+        function Initialize(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+        
+        // Simulated TTS and network latencies for demo
+        setInterval(() => {
+            if (isRecognizing) {
+                document.getElementById('ttsLatency').textContent = 40 + Math.floor(Math.random() * 20);
+                document.getElementById('networkLatency').textContent = 15 + Math.floor(Math.random() * 10);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

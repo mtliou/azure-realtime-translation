@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>TTS Stable Translation Test</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .log-output {
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-line {
+            margin: 2px 0;
+        }
+        .error {
+            color: #ff6b6b;
+        }
+        .success {
+            color: #51cf66;
+        }
+        .info {
+            color: #339af0;
+        }
+        .warning {
+            color: #ffd43b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TTS Stable Translation Test</h1>
+        
+        <div class="test-section">
+            <h2>1. Initialize TTS</h2>
+            <button onclick="testInitializeTTS()">Initialize TTS</button>
+            <button onclick="testSpeakDirect()">Test Direct Speech</button>
+        </div>
+        
+        <div class="test-section">
+            <h2>2. Test Stability Manager</h2>
+            <button onclick="testStabilityManager()">Test Stability Manager</button>
+            <button onclick="testProcessTranslation()">Test Process Translation</button>
+        </div>
+        
+        <div class="test-section">
+            <h2>3. Test Full Flow</h2>
+            <button onclick="testFullFlow()">Test Full Translation Flow</button>
+            <button onclick="clearLogs()">Clear Logs</button>
+        </div>
+        
+        <div class="log-output" id="logOutput">
+            <div class="log-line info">Test console ready...</div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3003/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let synthesizer;
+        let ttsManager;
+        
+        // Copy the StableTTSManager class from the stable listener
+        class StableTTSManager {
+            constructor() {
+                this.pendingTranslations = new Map();
+                this.spokenTexts = new Set();
+                this.stabilityDelay = 1500;
+                this.minConfidence = 0.85;
+                this.isSpeaking = false;
+                this.speakQueue = [];
+                this.phrasesSpoken = 0;
+                this.totalStabilityTime = 0;
+                this.stabilityTimeouts = new Map();
+            }
+            
+            processTranslation(translationId, original, translation, confidence, isFinal) {
+                log(`Processing translation: id=${translationId}, isFinal=${isFinal}, confidence=${confidence}`, 'info');
+                
+                const key = `${translationId}-${original.substring(0, 20)}`;
+                
+                if (this.stabilityTimeouts.has(key)) {
+                    clearTimeout(this.stabilityTimeouts.get(key));
+                }
+                
+                if (isFinal && confidence >= this.minConfidence) {
+                    log(`Final result with good confidence, scheduling speech immediately`, 'success');
+                    this.scheduleSpeech(key, translation, Date.now());
+                    return;
+                }
+                
+                this.pendingTranslations.set(key, {
+                    original,
+                    translation,
+                    confidence,
+                    firstSeen: this.pendingTranslations.get(key)?.firstSeen || Date.now(),
+                    lastUpdate: Date.now()
+                });
+                
+                log(`Partial result, scheduling stability check in ${this.stabilityDelay}ms`, 'info');
+                
+                const timeout = setTimeout(() => {
+                    this.checkStability(key);
+                }, this.stabilityDelay);
+                
+                this.stabilityTimeouts.set(key, timeout);
+            }
+            
+            checkStability(key) {
+                const pending = this.pendingTranslations.get(key);
+                if (!pending) {
+                    log(`No pending translation found for key: ${key}`, 'warning');
+                    return;
+                }
+                
+                const timeSinceUpdate = Date.now() - pending.lastUpdate;
+                log(`Checking stability: timeSinceUpdate=${timeSinceUpdate}ms, confidence=${pending.confidence}`, 'info');
+                
+                if (timeSinceUpdate >= this.stabilityDelay && pending.confidence >= this.minConfidence) {
+                    log(`Translation stable, scheduling speech`, 'success');
+                    this.scheduleSpeech(key, pending.translation, pending.firstSeen);
+                    this.pendingTranslations.delete(key);
+                    this.stabilityTimeouts.delete(key);
+                } else {
+                    log(`Translation not stable yet`, 'warning');
+                }
+            }
+            
+            scheduleSpeech(key, translation, firstSeenTime) {
+                log(`scheduleSpeech called with key=${key}, text="${translation}"`, 'info');
+                
+                if (this.spokenTexts.has(translation)) {
+                    log(`DUPLICATE PREVENTED: This text has already been spoken`, 'warning');
+                    return;
+                }
+                
+                log(`Adding text to spokenTexts set`, 'info');
+                this.spokenTexts.add(translation);
+                
+                const stabilityTime = Date.now() - firstSeenTime;
+                this.totalStabilityTime += stabilityTime;
+                this.phrasesSpoken++;
+                
+                log(`Adding to speak queue, current queue size: ${this.speakQueue.length}`, 'info');
+                this.speakQueue.push({
+                    text: translation,
+                    stabilityTime
+                });
+                
+                if (!this.isSpeaking) {
+                    log(`Not currently speaking, starting processQueue`, 'info');
+                    this.processQueue();
+                } else {
+                    log(`Already speaking, item queued`, 'info');
+                }
+            }
+            
+            async processQueue() {
+                log(`processQueue called, queue size: ${this.speakQueue.length}`, 'info');
+                
+                if (this.speakQueue.length === 0) {
+                    log(`Queue empty, stopping`, 'info');
+                    this.isSpeaking = false;
+                    return;
+                }
+                
+                this.isSpeaking = true;
+                
+                const item = this.speakQueue.shift();
+                log(`Processing item from queue: "${item.text}"`, 'info');
+                
+                try {
+                    log(`Calling speak() with text`, 'info');
+                    await this.speak(item.text);
+                    log(`Speech completed successfully`, 'success');
+                } catch (error) {
+                    log(`TTS error: ${error}`, 'error');
+                }
+                
+                log(`Scheduling next queue process in 300ms`, 'info');
+                setTimeout(() => this.processQueue(), 300);
+            }
+            
+            speak(text) {
+                return new Promise((resolve, reject) => {
+                    log(`speak() called with text: "${text}"`, 'info');
+                    
+                    if (!synthesizer) {
+                        log(`ERROR: Synthesizer not initialized!`, 'error');
+                        reject('TTS not initialized');
+                        return;
+                    }
+                    
+                    log(`Calling synthesizer.speakTextAsync`, 'info');
+                    synthesizer.speakTextAsync(
+                        text,
+                        result => {
+                            log(`Speech synthesis result: reason=${result.reason}`, 'info');
+                            if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                                log(`Speech synthesis completed successfully`, 'success');
+                                resolve();
+                            } else {
+                                log(`Speech synthesis failed: ${result.errorDetails}`, 'error');
+                                reject(result.errorDetails);
+                            }
+                        },
+                        error => {
+                            log(`Speech synthesis error: ${error}`, 'error');
+                            reject(error);
+                        }
+                    );
+                });
+            }
+            
+            reset() {
+                for (const timeout of this.stabilityTimeouts.values()) {
+                    clearTimeout(timeout);
+                }
+                
+                this.pendingTranslations.clear();
+                this.spokenTexts.clear();
+                this.stabilityTimeouts.clear();
+                this.speakQueue = [];
+                this.isSpeaking = false;
+                this.phrasesSpoken = 0;
+                this.totalStabilityTime = 0;
+            }
+        }
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            if (!!window.SpeechSDK) {
+                SpeechSDK = window.SpeechSDK;
+                log('Speech SDK loaded successfully', 'success');
+            } else {
+                log('Speech SDK not loaded!', 'error');
+            }
+        });
+        
+        // Logging function
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logOutput = document.getElementById('logOutput');
+            const logLine = document.createElement('div');
+            logLine.className = `log-line ${type}`;
+            logLine.textContent = `[${timestamp}] ${message}`;
+            logOutput.appendChild(logLine);
+            logOutput.scrollTop = logOutput.scrollHeight;
+            console.log(`[TTS Test] ${message}`);
+        }
+        
+        function clearLogs() {
+            document.getElementById('logOutput').innerHTML = '<div class="log-line info">Test console cleared...</div>';
+        }
+        
+        // Test functions
+        async function testInitializeTTS() {
+            log('Testing TTS initialization...', 'info');
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                log(`Got token and region: ${serviceRegion}`, 'success');
+                
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    serviceRegion
+                );
+                
+                speechConfig.speechSynthesisVoiceName = 'en-US-JennyNeural';
+                log(`Selected voice: en-US-JennyNeural`, 'info');
+                
+                speechConfig.speechSynthesisOutputFormat = SpeechSDK.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+                
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultSpeakerOutput();
+                synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig, audioConfig);
+                log('TTS initialized successfully', 'success');
+            } catch (error) {
+                log(`TTS initialization error: ${error}`, 'error');
+            }
+        }
+        
+        async function testSpeakDirect() {
+            log('Testing direct speech synthesis...', 'info');
+            if (!synthesizer) {
+                log('Please initialize TTS first!', 'error');
+                return;
+            }
+            
+            const testText = "This is a test of the text to speech system.";
+            log(`Speaking: "${testText}"`, 'info');
+            
+            synthesizer.speakTextAsync(
+                testText,
+                result => {
+                    if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                        log('Direct speech synthesis completed successfully', 'success');
+                    } else {
+                        log(`Direct speech synthesis failed: ${result.errorDetails}`, 'error');
+                    }
+                },
+                error => {
+                    log(`Direct speech synthesis error: ${error}`, 'error');
+                }
+            );
+        }
+        
+        function testStabilityManager() {
+            log('Testing Stability Manager...', 'info');
+            ttsManager = new StableTTSManager();
+            log('Stability Manager created', 'success');
+            log(`Settings: stabilityDelay=${ttsManager.stabilityDelay}ms, minConfidence=${ttsManager.minConfidence}`, 'info');
+        }
+        
+        async function testProcessTranslation() {
+            log('Testing translation processing...', 'info');
+            if (!ttsManager) {
+                log('Please test Stability Manager first!', 'error');
+                return;
+            }
+            if (!synthesizer) {
+                log('Please initialize TTS first!', 'error');
+                return;
+            }
+            
+            // Simulate partial results
+            log('Simulating partial translation...', 'info');
+            ttsManager.processTranslation(
+                'test-1',
+                'Hello world',
+                'Bonjour le monde',
+                0.7,
+                false
+            );
+            
+            // Wait and send another partial
+            setTimeout(() => {
+                log('Sending second partial with higher confidence...', 'info');
+                ttsManager.processTranslation(
+                    'test-1',
+                    'Hello world',
+                    'Bonjour le monde',
+                    0.9,
+                    false
+                );
+            }, 500);
+            
+            // Send final after 2 seconds
+            setTimeout(() => {
+                log('Sending final translation...', 'info');
+                ttsManager.processTranslation(
+                    'test-1',
+                    'Hello world',
+                    'Bonjour le monde',
+                    0.95,
+                    true
+                );
+            }, 2000);
+        }
+        
+        async function testFullFlow() {
+            log('Testing full translation flow...', 'info');
+            
+            // Initialize if needed
+            if (!synthesizer) {
+                await testInitializeTTS();
+            }
+            
+            // Create manager if needed
+            if (!ttsManager) {
+                testStabilityManager();
+            }
+            
+            // Clear any previous state
+            ttsManager.reset();
+            log('Manager reset', 'info');
+            
+            // Test 1: High confidence final result - should speak immediately
+            log('Test 1: High confidence final result', 'info');
+            ttsManager.processTranslation(
+                'flow-1',
+                'Good morning',
+                'Buenos días',
+                0.95,
+                true
+            );
+            
+            // Test 2: Low confidence partials that stabilize
+            setTimeout(() => {
+                log('Test 2: Low confidence partials', 'info');
+                ttsManager.processTranslation(
+                    'flow-2',
+                    'How are you',
+                    'Cómo estás',
+                    0.8,
+                    false
+                );
+                
+                // Update with higher confidence
+                setTimeout(() => {
+                    ttsManager.processTranslation(
+                        'flow-2',
+                        'How are you',
+                        'Cómo estás',
+                        0.9,
+                        false
+                    );
+                }, 800);
+            }, 3000);
+            
+            // Test 3: Duplicate prevention
+            setTimeout(() => {
+                log('Test 3: Testing duplicate prevention', 'info');
+                ttsManager.processTranslation(
+                    'flow-3',
+                    'Good morning',
+                    'Buenos días',
+                    0.95,
+                    true
+                );
+            }, 6000);
+        }
+    </script>
+</body>
+</html>

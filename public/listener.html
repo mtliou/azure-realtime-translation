@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Listener - Simultaneous Translation Receiver</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #1a1a1a;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #a78bfa;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .join-section {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .join-form {
+            display: flex;
+            gap: 15px;
+            max-width: 500px;
+            margin: 20px auto;
+        }
+        .session-input {
+            flex: 1;
+            padding: 15px;
+            font-size: 1.5em;
+            text-align: center;
+            background: #1a1a1a;
+            border: 2px solid #333;
+            border-radius: 8px;
+            color: #e0e0e0;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+        }
+        .session-input:focus {
+            outline: none;
+            border-color: #a78bfa;
+        }
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: #2a2a2a;
+            border-radius: 20px;
+            margin: 20px 0;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #888;
+        }
+        .status-dot.connected { background: #66bb6a; }
+        .status-dot.listening { 
+            background: #a78bfa; 
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .settings-panel {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .control-group h3 {
+            color: #a78bfa;
+            margin: 0 0 15px 0;
+            font-size: 1.1em;
+        }
+        select, button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #2a2a2a;
+            color: #e0e0e0;
+            font-size: 15px;
+        }
+        button {
+            background: #a78bfa;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button:hover:not(:disabled) {
+            background: #9474e8;
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .speaker-info {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .speaker-info.active { display: block; }
+        .speaker-details {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .audio-waveform {
+            height: 80px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .wave-animation {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            height: 60%;
+        }
+        .wave-bar {
+            width: 4px;
+            background: #a78bfa;
+            border-radius: 2px;
+            animation: wave 1s ease-in-out infinite;
+        }
+        .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+        .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+        .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+        .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+        @keyframes wave {
+            0%, 100% { height: 20%; }
+            50% { height: 100%; }
+        }
+        .translation-display {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .captions-box {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 150px;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            line-height: 1.6;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .captions-text {
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        .captions-text.partial {
+            opacity: 0.8;
+            font-style: italic;
+        }
+        .transcript-history {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .transcript-item {
+            margin: 10px 0;
+            padding: 15px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            border-left: 3px solid #a78bfa;
+        }
+        .transcript-time {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .transcript-original {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 5px;
+            font-style: italic;
+        }
+        .transcript-translation {
+            color: #e0e0e0;
+        }
+        .metrics-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .metric-box {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #a78bfa;
+        }
+        .metric-label {
+            font-size: 0.8em;
+            color: #888;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        .volume-control {
+            margin-top: 20px;
+        }
+        .volume-slider {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .playback-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .playback-controls button {
+            flex: 1;
+        }
+        .error-message {
+            background: #f87171;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎧 Listener - Translation Receiver</h1>
+        <p class="subtitle">Join a translation session to hear in your language</p>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="join-section" id="joinSection">
+            <h3>Enter Session Code</h3>
+            <div class="join-form">
+                <input type="text" 
+                       id="sessionCodeInput" 
+                       class="session-input" 
+                       placeholder="ABCD" 
+                       maxlength="4"
+                       onkeyup="this.value = this.value.toUpperCase()">
+            </div>
+            <div class="connection-status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Not connected</span>
+            </div>
+        </div>
+        
+        <div class="settings-panel" id="settingsPanel" style="display: none;">
+            <div class="settings-grid">
+                <div class="control-group">
+                    <h3>Your Language</h3>
+                    <select id="targetLanguage">
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="zh-Hans">Chinese (Simplified)</option>
+                        <option value="ja">Japanese</option>
+                        <option value="ko">Korean</option>
+                        <option value="it">Italian</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="ru">Russian</option>
+                        <option value="ar">Arabic</option>
+                        <option value="hi">Hindi</option>
+                    </select>
+                    <select id="targetVoice">
+                        <option value="en-US-JennyNeural">Jenny (Female)</option>
+                        <option value="en-US-GuyNeural">Guy (Male)</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <h3>Audio Settings</h3>
+                    <label style="display: block; margin: 10px 0;">
+                        <input type="checkbox" id="autoSpeak" checked>
+                        Auto-play translations
+                    </label>
+                    <label style="display: block; margin: 10px 0;">
+                        <input type="checkbox" id="showCaptions" checked>
+                        Show live captions
+                    </label>
+                    <div class="volume-control">
+                        <label>Volume</label>
+                        <input type="range" 
+                               id="volumeSlider" 
+                               class="volume-slider" 
+                               min="0" 
+                               max="100" 
+                               value="80">
+                    </div>
+                </div>
+            </div>
+            
+            <button id="joinBtn" onclick="joinSession()">
+                🎧 Join Session
+            </button>
+            <button id="leaveBtn" onclick="leaveSession()" disabled>
+                ⏹️ Leave Session
+            </button>
+        </div>
+        
+        <div class="speaker-info" id="speakerInfo">
+            <h3 style="color: #a78bfa; margin-bottom: 15px;">Live Translation Session</h3>
+            <div class="speaker-details">
+                <div style="flex: 0 0 auto;">
+                    <div>Speaker Language: <span id="speakerLanguage" style="color: #a78bfa;">--</span></div>
+                    <div style="margin-top: 5px;">Session: <span id="activeSession" style="color: #a78bfa;">--</span></div>
+                </div>
+                <div class="audio-waveform">
+                    <div class="wave-animation" id="waveAnimation" style="display: none;">
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                    </div>
+                    <div id="waitingText" style="color: #666;">Waiting for speaker...</div>
+                </div>
+            </div>
+            
+            <div class="metrics-row">
+                <div class="metric-box">
+                    <div class="metric-value" id="delayMetric">--</div>
+                    <div class="metric-label">Delay (ms)</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value" id="translationsMetric">0</div>
+                    <div class="metric-label">Translations</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value" id="accuracyMetric">--</div>
+                    <div class="metric-label">Confidence %</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="translation-display" id="translationDisplay" style="display: none;">
+            <h3 style="color: #a78bfa; margin-bottom: 20px;">Live Translation</h3>
+            
+            <div class="captions-box" id="captionsBox">
+                <div class="captions-text" id="captionsText">
+                    Waiting for speech...
+                </div>
+            </div>
+            
+            <div class="playback-controls">
+                <button onclick="pausePlayback()" id="pauseBtn">
+                    ⏸️ Pause Audio
+                </button>
+                <button onclick="resumePlayback()" id="resumeBtn" style="display: none;">
+                    ▶️ Resume Audio
+                </button>
+                <button onclick="skipCurrent()">
+                    ⏭️ Skip Current
+                </button>
+            </div>
+            
+            <h4 style="color: #a78bfa; margin: 20px 0 10px 0;">Translation History</h4>
+            <div class="transcript-history" id="transcriptHistory">
+                <div style="color: #666; text-align: center;">Translations will appear here...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3003/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let synthesizer;
+        let socket;
+        let sessionCode;
+        let isListening = false;
+        let isPaused = false;
+        
+        // Translation state
+        let translationQueue = [];
+        let currentlySynthesizing = false;
+        let translationCount = 0;
+        let lastTranslationTime = 0;
+        
+        // Voice mappings
+        const voiceMap = {
+            'en': [
+                { value: 'en-US-JennyNeural', text: 'Jenny (Female)' },
+                { value: 'en-US-GuyNeural', text: 'Guy (Male)' }
+            ],
+            'es': [
+                { value: 'es-ES-ElviraNeural', text: 'Elvira (Female)' },
+                { value: 'es-ES-AlvaroNeural', text: 'Alvaro (Male)' }
+            ],
+            'fr': [
+                { value: 'fr-FR-DeniseNeural', text: 'Denise (Female)' },
+                { value: 'fr-FR-HenriNeural', text: 'Henri (Male)' }
+            ],
+            'de': [
+                { value: 'de-DE-KatjaNeural', text: 'Katja (Female)' },
+                { value: 'de-DE-ConradNeural', text: 'Conrad (Male)' }
+            ],
+            'zh-Hans': [
+                { value: 'zh-CN-XiaoxiaoNeural', text: 'Xiaoxiao (Female)' },
+                { value: 'zh-CN-YunxiNeural', text: 'Yunxi (Male)' }
+            ],
+            'ja': [
+                { value: 'ja-JP-NanamiNeural', text: 'Nanami (Female)' },
+                { value: 'ja-JP-KeitaNeural', text: 'Keita (Male)' }
+            ],
+            'ko': [
+                { value: 'ko-KR-SunHiNeural', text: 'Sun-Hi (Female)' },
+                { value: 'ko-KR-InJoonNeural', text: 'InJoon (Male)' }
+            ],
+            'it': [
+                { value: 'it-IT-ElsaNeural', text: 'Elsa (Female)' },
+                { value: 'it-IT-DiegoNeural', text: 'Diego (Male)' }
+            ],
+            'pt': [
+                { value: 'pt-BR-FranciscaNeural', text: 'Francisca (Female)' },
+                { value: 'pt-BR-AntonioNeural', text: 'Antonio (Male)' }
+            ],
+            'ru': [
+                { value: 'ru-RU-DariyaNeural', text: 'Dariya (Female)' },
+                { value: 'ru-RU-DmitryNeural', text: 'Dmitry (Male)' }
+            ],
+            'ar': [
+                { value: 'ar-SA-ZariyahNeural', text: 'Zariyah (Female)' },
+                { value: 'ar-SA-HamedNeural', text: 'Hamed (Male)' }
+            ],
+            'hi': [
+                { value: 'hi-IN-SwaraNeural', text: 'Swara (Female)' },
+                { value: 'hi-IN-MadhurNeural', text: 'Madhur (Male)' }
+            ]
+        };
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            Initialize(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                initializeSocket();
+                updateTargetVoices();
+                checkUrlParams();
+            });
+            
+            document.getElementById('targetLanguage').addEventListener('change', updateTargetVoices);
+            document.getElementById('sessionCodeInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    showSettingsPanel();
+                }
+            });
+        });
+        
+        function checkUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            const session = params.get('session');
+            if (session) {
+                document.getElementById('sessionCodeInput').value = session.toUpperCase();
+                showSettingsPanel();
+            }
+        }
+        
+        function showSettingsPanel() {
+            const code = document.getElementById('sessionCodeInput').value;
+            if (code.length === 4) {
+                sessionCode = code;
+                document.getElementById('settingsPanel').style.display = 'block';
+                document.getElementById('joinSection').style.display = 'none';
+            }
+        }
+        
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                updateStatus('connected', '🟢 Connected to server');
+            });
+            
+            socket.on('session-not-found', () => {
+                showError('Session not found. Please check the code.');
+                leaveSession();
+            });
+            
+            socket.on('speaker-info', (data) => {
+                document.getElementById('speakerLanguage').textContent = data.sourceLanguage || 'Unknown';
+                document.getElementById('activeSession').textContent = sessionCode;
+            });
+            
+            socket.on('translation-data', async (data) => {
+                if (!isListening || isPaused) return;
+                
+                // Show we're receiving
+                showWaveAnimation(true);
+                setTimeout(() => showWaveAnimation(false), 2000);
+                
+                // Update captions if enabled
+                if (document.getElementById('showCaptions').checked) {
+                    updateCaptions(data.translation, data.isFinal);
+                }
+                
+                // Queue for synthesis if final
+                if (data.isFinal && document.getElementById('autoSpeak').checked) {
+                    queueTranslation(data);
+                }
+                
+                // Update metrics
+                updateMetrics(data);
+                
+                // Add to history if final
+                if (data.isFinal) {
+                    addToHistory(data);
+                }
+            });
+            
+            socket.on('speaker-disconnected', () => {
+                showError('Speaker has disconnected');
+                showWaveAnimation(false);
+            });
+            
+            socket.on('disconnect', () => {
+                updateStatus('disconnected', '🔴 Disconnected from server');
+            });
+        }
+        
+        function updateTargetVoices() {
+            const targetLang = document.getElementById('targetLanguage').value;
+            const voiceSelect = document.getElementById('targetVoice');
+            const voices = voiceMap[targetLang] || [];
+            
+            voiceSelect.innerHTML = '';
+            voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.value;
+                option.textContent = voice.text;
+                voiceSelect.appendChild(option);
+            });
+        }
+        
+        async function RequestAuthorizationToken() {
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                return res.data.region;
+            } catch (err) {
+                showError('Failed to get authorization token');
+                throw err;
+            }
+        }
+        
+        async function joinSession() {
+            try {
+                await RequestAuthorizationToken();
+                
+                // Create synthesizer
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    serviceRegion
+                );
+                speechConfig.speechSynthesisVoiceName = document.getElementById('targetVoice').value;
+                
+                // Enable streaming synthesis
+                speechConfig.setProperty(
+                    SpeechSDK.PropertyId.SpeechServiceConnection_SynthEnableCompressedAudioTransmission,
+                    "true"
+                );
+                
+                synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig);
+                
+                // Join the session
+                socket.emit('listener-join', {
+                    sessionCode: sessionCode,
+                    targetLanguage: document.getElementById('targetLanguage').value
+                });
+                
+                isListening = true;
+                updateStatus('listening', '🎧 Listening for translations');
+                
+                // Update UI
+                document.getElementById('joinBtn').disabled = true;
+                document.getElementById('leaveBtn').disabled = false;
+                document.getElementById('speakerInfo').classList.add('active');
+                document.getElementById('translationDisplay').style.display = 'block';
+                
+            } catch (error) {
+                showError('Failed to join session: ' + error.message);
+            }
+        }
+        
+        function leaveSession() {
+            isListening = false;
+            
+            if (socket) {
+                socket.emit('listener-leave', { sessionCode });
+            }
+            
+            if (synthesizer) {
+                synthesizer.close();
+                synthesizer = undefined;
+            }
+            
+            // Reset UI
+            document.getElementById('joinBtn').disabled = false;
+            document.getElementById('leaveBtn').disabled = true;
+            document.getElementById('speakerInfo').classList.remove('active');
+            document.getElementById('translationDisplay').style.display = 'none';
+            document.getElementById('joinSection').style.display = 'block';
+            document.getElementById('settingsPanel').style.display = 'none';
+            
+            updateStatus('disconnected', '🔴 Disconnected');
+        }
+        
+        function queueTranslation(data) {
+            translationQueue.push({
+                text: data.translation,
+                timestamp: data.timestamp,
+                original: data.original
+            });
+            
+            if (!currentlySynthesizing) {
+                processTranslationQueue();
+            }
+        }
+        
+        async function processTranslationQueue() {
+            if (translationQueue.length === 0 || currentlySynthesizing || isPaused) return;
+            
+            currentlySynthesizing = true;
+            const item = translationQueue.shift();
+            
+            // Update voice if changed
+            const voiceName = document.getElementById('targetVoice').value;
+            if (synthesizer.properties && synthesizer.properties.getProperty('SpeechSynthesisVoiceName') !== voiceName) {
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    serviceRegion
+                );
+                speechConfig.speechSynthesisVoiceName = voiceName;
+                synthesizer.close();
+                synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig);
+            }
+            
+            // Apply volume
+            const volume = document.getElementById('volumeSlider').value / 100;
+            
+            synthesizer.speakTextAsync(
+                item.text,
+                result => {
+                    if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                        translationCount++;
+                        document.getElementById('translationsMetric').textContent = translationCount;
+                    }
+                    currentlySynthesizing = false;
+                    
+                    // Process next
+                    if (translationQueue.length > 0) {
+                        setTimeout(() => processTranslationQueue(), 100);
+                    }
+                },
+                error => {
+                    console.error('Synthesis error:', error);
+                    currentlySynthesizing = false;
+                    
+                    // Try next
+                    if (translationQueue.length > 0) {
+                        setTimeout(() => processTranslationQueue(), 200);
+                    }
+                }
+            );
+        }
+        
+        function updateCaptions(text, isFinal) {
+            const captionsText = document.getElementById('captionsText');
+            captionsText.textContent = text;
+            captionsText.className = 'captions-text' + (isFinal ? '' : ' partial');
+        }
+        
+        function addToHistory(data) {
+            const history = document.getElementById('transcriptHistory');
+            
+            // Clear placeholder
+            if (history.querySelector('div[style*="color: #666"]')) {
+                history.innerHTML = '';
+            }
+            
+            const item = document.createElement('div');
+            item.className = 'transcript-item';
+            item.innerHTML = `
+                <div class="transcript-time">${new Date(data.timestamp).toLocaleTimeString()}</div>
+                ${data.original ? `<div class="transcript-original">${data.original}</div>` : ''}
+                <div class="transcript-translation">${data.translation}</div>
+            `;
+            
+            history.appendChild(item);
+            history.scrollTop = history.scrollHeight;
+            
+            // Keep only last 20 items
+            const items = history.querySelectorAll('.transcript-item');
+            if (items.length > 20) {
+                items[0].remove();
+            }
+        }
+        
+        function updateMetrics(data) {
+            // Update delay
+            if (data.timestamp && lastTranslationTime) {
+                const delay = Date.now() - data.timestamp;
+                document.getElementById('delayMetric').textContent = delay < 1000 ? delay : '999+';
+            }
+            lastTranslationTime = Date.now();
+            
+            // Update confidence
+            if (data.confidence) {
+                const confidence = Math.round(data.confidence * 100);
+                document.getElementById('accuracyMetric').textContent = confidence;
+            }
+        }
+        
+        function showWaveAnimation(show) {
+            document.getElementById('waveAnimation').style.display = show ? 'flex' : 'none';
+            document.getElementById('waitingText').style.display = show ? 'none' : 'block';
+        }
+        
+        function pausePlayback() {
+            isPaused = true;
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'block';
+        }
+        
+        function resumePlayback() {
+            isPaused = false;
+            document.getElementById('pauseBtn').style.display = 'block';
+            document.getElementById('resumeBtn').style.display = 'none';
+            processTranslationQueue();
+        }
+        
+        function skipCurrent() {
+            if (currentlySynthesizing && synthesizer) {
+                synthesizer.close();
+                synthesizer = new SpeechSDK.SpeechSynthesizer(
+                    SpeechSDK.SpeechConfig.fromAuthorizationToken(authorizationToken, serviceRegion)
+                );
+                currentlySynthesizing = false;
+                processTranslationQueue();
+            }
+        }
+        
+        function updateStatus(type, message) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            
+            dot.className = 'status-dot ' + type;
+            text.textContent = message;
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // SDK initialization
+        function Initialize(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+    </script>
+</body>
+</html>

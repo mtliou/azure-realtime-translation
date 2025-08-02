@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Optimal Simultaneous Translation - Professional Speech-to-Speech</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #1a1a1a;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #4fc3d1;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #4fc3d1, #66bb6a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .control-panel {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .transcript-panel {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .session-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .session-input input {
+            flex: 1;
+            padding: 12px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 18px;
+            font-family: monospace;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .language-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 15px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .lang-option {
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-size: 0.9em;
+            border: 2px solid transparent;
+        }
+        .lang-option.active {
+            background: #4fc3d1;
+            color: #000;
+            border-color: #29b6c7;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #4fc3d1;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button:hover:not(:disabled) {
+            background: #29b6c7;
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .mode-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .mode-btn {
+            padding: 10px;
+            background: #2a2a2a;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            color: #aaa;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-size: 0.85em;
+        }
+        .mode-btn.active {
+            background: #1a472a;
+            color: #66bb6a;
+            border-color: #66bb6a;
+        }
+        .status-bar {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: #2a2a2a;
+            border-radius: 15px;
+            font-size: 0.85em;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #888;
+        }
+        .status-dot.active {
+            background: #66bb6a;
+        }
+        .status-dot.speaking {
+            background: #4fc3d1;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .conversation-entry {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #1a1a1a;
+            border-radius: 10px;
+            border-left: 4px solid #4fc3d1;
+            position: relative;
+        }
+        .conversation-entry.speaking {
+            border-left-color: #66bb6a;
+            background: #1a2a1a;
+        }
+        .entry-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .entry-lang {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            background: #2a2a2a;
+            border-radius: 15px;
+            font-size: 0.85em;
+        }
+        .entry-time {
+            font-size: 0.75em;
+            color: #666;
+        }
+        .original-text {
+            font-size: 0.95em;
+            color: #888;
+            margin-bottom: 10px;
+            line-height: 1.5;
+            padding: 10px;
+            background: #242424;
+            border-radius: 6px;
+        }
+        .translation-text {
+            font-size: 1.15em;
+            line-height: 1.6;
+            color: #e0e0e0;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+        }
+        .phrase-chunk {
+            display: inline;
+            padding: 2px 6px;
+            margin: 0 2px;
+            background: transparent;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+        .phrase-chunk.spoken {
+            background: #1b5e20;
+            color: #a5d6a7;
+        }
+        .phrase-chunk.speaking {
+            background: #4fc3d1;
+            color: #000;
+            animation: speaking-pulse 0.5s;
+        }
+        @keyframes speaking-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .metric-box {
+            background: #242424;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #4fc3d1;
+        }
+        .metric-label {
+            font-size: 0.7em;
+            color: #888;
+            text-transform: uppercase;
+            margin-top: 3px;
+        }
+        .error-message {
+            background: #f87171;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .success-message {
+            background: #66bb6a;
+            color: #1a472a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .settings-section {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 8px 0;
+        }
+        .setting-label {
+            font-size: 0.85em;
+            color: #aaa;
+        }
+        .setting-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        input[type="range"] {
+            width: 100px;
+            height: 5px;
+            background: #333;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+        .setting-value {
+            background: #2a2a2a;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            color: #4fc3d1;
+            min-width: 50px;
+            text-align: center;
+        }
+        .phrase-indicator {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            padding: 4px 12px;
+            background: #2a2a2a;
+            border-radius: 15px;
+            font-size: 0.75em;
+            color: #888;
+        }
+        .phrase-indicator.complete {
+            background: #1b5e20;
+            color: #a5d6a7;
+        }
+        .clear-btn {
+            width: auto;
+            padding: 8px 20px;
+            font-size: 0.85em;
+            background: #444;
+            margin-top: 10px;
+        }
+        .clear-btn:hover:not(:disabled) {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Optimal Simultaneous Translation</h1>
+        <p class="subtitle">Professional Speech-to-Speech • Intelligent Phrase Detection • Full Transcript History</p>
+        
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-dot" id="connectionDot"></div>
+                <span id="connectionStatus">Disconnected</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="receivingDot"></div>
+                <span id="receivingStatus">Not Receiving</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="speakingDot"></div>
+                <span id="speakingStatus">Not Speaking</span>
+            </div>
+        </div>
+        
+        <div class="metrics-grid">
+            <div class="metric-box">
+                <div class="metric-value" id="totalWords">0</div>
+                <div class="metric-label">Total Words</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="phrasesSpoken">0</div>
+                <div class="metric-label">Phrases</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="avgPhraseSize">--</div>
+                <div class="metric-label">Avg Size</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="conversationTime">0:00</div>
+                <div class="metric-label">Duration</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="bufferSize">0</div>
+                <div class="metric-label">Buffer</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="latencyMs">--</div>
+                <div class="metric-label">Latency</div>
+            </div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="control-panel">
+                <h3 style="margin-top: 0; color: #4fc3d1;">Session Control</h3>
+                
+                <div class="session-input">
+                    <input type="text" id="sessionCode" placeholder="Session code" maxlength="4">
+                </div>
+                
+                <h4 style="color: #4fc3d1;">Translation Mode</h4>
+                <div class="mode-selector">
+                    <div class="mode-btn active" data-mode="smart" onclick="selectMode(this)">
+                        Smart
+                    </div>
+                    <div class="mode-btn" data-mode="incremental" onclick="selectMode(this)">
+                        Incremental
+                    </div>
+                    <div class="mode-btn" data-mode="stable" onclick="selectMode(this)">
+                        Stable
+                    </div>
+                </div>
+                
+                <h4 style="color: #4fc3d1;">Target Language</h4>
+                <div class="language-selector">
+                    <div class="lang-option active" data-lang="en" onclick="selectLanguage(this)">
+                        🇺🇸 English
+                    </div>
+                    <div class="lang-option" data-lang="fr" onclick="selectLanguage(this)">
+                        🇫🇷 French
+                    </div>
+                    <div class="lang-option" data-lang="es" onclick="selectLanguage(this)">
+                        🇪🇸 Spanish
+                    </div>
+                    <div class="lang-option" data-lang="de" onclick="selectLanguage(this)">
+                        🇩🇪 German
+                    </div>
+                    <div class="lang-option" data-lang="it" onclick="selectLanguage(this)">
+                        🇮🇹 Italian
+                    </div>
+                    <div class="lang-option" data-lang="pt" onclick="selectLanguage(this)">
+                        🇧🇷 Portuguese
+                    </div>
+                    <div class="lang-option" data-lang="zh" onclick="selectLanguage(this)">
+                        🇨🇳 Chinese
+                    </div>
+                    <div class="lang-option" data-lang="ja" onclick="selectLanguage(this)">
+                        🇯🇵 Japanese
+                    </div>
+                    <div class="lang-option" data-lang="ko" onclick="selectLanguage(this)">
+                        🇰🇷 Korean
+                    </div>
+                    <div class="lang-option" data-lang="ar" onclick="selectLanguage(this)">
+                        🇸🇦 Arabic
+                    </div>
+                    <div class="lang-option" data-lang="ru" onclick="selectLanguage(this)">
+                        🇷🇺 Russian
+                    </div>
+                    <div class="lang-option" data-lang="hi" onclick="selectLanguage(this)">
+                        🇮🇳 Hindi
+                    </div>
+                </div>
+                
+                <button id="joinBtn" onclick="joinSession()">Join Session</button>
+                <button id="leaveBtn" onclick="leaveSession()" style="display: none;">Leave Session</button>
+                
+                <div class="settings-section">
+                    <h4 style="margin-top: 0; color: #66bb6a;">Fine Tuning</h4>
+                    <div class="setting-row">
+                        <span class="setting-label">Phrase threshold:</span>
+                        <div class="setting-control">
+                            <input type="range" id="phraseThreshold" min="2" max="10" value="4">
+                            <span class="setting-value" id="phraseThresholdValue">4</span>
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Stability delay:</span>
+                        <div class="setting-control">
+                            <input type="range" id="stabilityDelay" min="500" max="3000" step="100" value="1500">
+                            <span class="setting-value" id="stabilityDelayValue">1.5s</span>
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Speech rate:</span>
+                        <div class="setting-control">
+                            <input type="range" id="speechRate" min="0.8" max="1.5" step="0.1" value="1.1">
+                            <span class="setting-value" id="speechRateValue">1.1x</span>
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Min change words:</span>
+                        <div class="setting-control">
+                            <input type="range" id="minChangeWords" min="1" max="10" value="3">
+                            <span class="setting-value" id="minChangeWordsValue">3</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="clear-btn" onclick="clearTranscript()">Clear Transcript</button>
+            </div>
+            
+            <div class="transcript-panel" id="transcriptPanel">
+                <h3 style="margin-top: 0; color: #4fc3d1;">Conversation Transcript</h3>
+                <div id="conversationDisplay">
+                    <div style="color: #666; text-align: center; margin-top: 50px;">
+                        Join a session to see live translations...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3003/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let synthesizer;
+        let socket;
+        let sessionCode;
+        let targetLanguage = 'en';
+        let isConnected = false;
+        let translationMode = 'smart';
+        let conversationStartTime = null;
+        
+        // Settings
+        let settings = {
+            phraseThreshold: 4,
+            stabilityDelay: 1500,
+            speechRate: 1.1,
+            minChangeWords: 3,  // Minimum new words before speaking
+            confirmationDelay: 800  // Extra delay to confirm translation is stable
+        };
+        
+        // Optimal TTS Manager
+        class OptimalTTSManager {
+            constructor() {
+                this.conversationHistory = [];
+                this.activeBuffers = new Map();
+                this.speakQueue = [];
+                this.isSpeaking = false;
+                this.metrics = {
+                    totalWords: 0,
+                    phrasesSpoken: 0,
+                    phraseWordCounts: []
+                };
+                this.silenceTimer = null;
+                this.spokenTextBySession = new Map(); // Track actual spoken text
+            }
+            
+            processTranslation(sessionId, original, translation, confidence, isFinal) {
+                // Update or create buffer
+                let buffer = this.activeBuffers.get(sessionId);
+                if (!buffer) {
+                    buffer = {
+                        sessionId,
+                        original: '',
+                        translation: '',
+                        chunks: [],
+                        lastExtracted: '', // Track what we last extracted for speaking
+                        lastTranslation: '', // Track previous translation to detect changes
+                        translationHistory: [], // Track translation history
+                        startTime: Date.now(),
+                        confidence,
+                        stableCount: 0  // Track how many times we've seen similar translation
+                    };
+                    this.activeBuffers.set(sessionId, buffer);
+                }
+                
+                // Check if translation has significantly changed
+                const hasSignificantChange = this.hasSignificantChange(buffer.lastTranslation, translation);
+                
+                // Update buffer
+                buffer.original = original;
+                buffer.translation = translation;
+                buffer.confidence = confidence;
+                
+                // Track translation stability
+                if (hasSignificantChange) {
+                    buffer.stableCount = 0;
+                    buffer.translationHistory = [translation];
+                } else {
+                    buffer.stableCount++;
+                    if (buffer.translationHistory.length > 5) {
+                        buffer.translationHistory.shift();
+                    }
+                    buffer.translationHistory.push(translation);
+                }
+                
+                buffer.lastTranslation = translation;
+                
+                updateBufferSize();
+                
+                // Process based on mode
+                switch (translationMode) {
+                    case 'smart':
+                        this.processSmartMode(buffer, isFinal);
+                        break;
+                    case 'incremental':
+                        this.processIncrementalMode(buffer, isFinal);
+                        break;
+                    case 'stable':
+                        this.processStableMode(buffer, isFinal);
+                        break;
+                }
+                
+                // Update display
+                this.updateConversationDisplay(sessionId, buffer, isFinal);
+            }
+            
+            processSmartMode(buffer, isFinal) {
+                // Wait for stable translation before processing
+                if (buffer.stableCount < 2 && !isFinal) {
+                    return;  // Wait for more stable translation
+                }
+                
+                // Extract new content based on what we last extracted
+                const newContent = this.extractNewContent(buffer.lastExtracted, buffer.translation);
+                
+                if (!newContent || newContent.trim().length === 0) return;
+                
+                // Check minimum change threshold
+                const newWords = newContent.split(' ').filter(w => w.length > 0);
+                if (newWords.length < settings.minChangeWords && !isFinal) {
+                    return;  // Not enough new content
+                }
+                
+                // Detect natural phrase boundaries
+                const isPhraseComplete = this.isPhraseComplete(newContent) || 
+                                       newWords.length >= settings.phraseThreshold ||
+                                       isFinal;
+                
+                if (isPhraseComplete) {
+                    // Clear any pending silence timer
+                    if (this.silenceTimer) {
+                        clearTimeout(this.silenceTimer);
+                        this.silenceTimer = null;
+                    }
+                    
+                    // Add confirmation delay to ensure translation is stable
+                    setTimeout(() => {
+                        // Re-check that content hasn't changed
+                        const currentNew = this.extractNewContent(buffer.lastExtracted, buffer.translation);
+                        if (currentNew && currentNew.trim().length > 0 && 
+                            (currentNew === newContent || this.areSimilar(currentNew, newContent))) {
+                            this.queuePhrase(buffer.sessionId, currentNew, buffer.translation);
+                            buffer.lastExtracted = buffer.translation;
+                        }
+                    }, settings.confirmationDelay);
+                } else {
+                    // Set silence timer for partial phrases
+                    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+                    this.silenceTimer = setTimeout(() => {
+                        const latestNew = this.extractNewContent(buffer.lastExtracted, buffer.translation);
+                        if (latestNew && latestNew.trim().length > 0) {
+                            const words = latestNew.split(' ').filter(w => w.length > 0);
+                            if (words.length >= settings.minChangeWords) {
+                                this.queuePhrase(buffer.sessionId, latestNew, buffer.translation);
+                                buffer.lastExtracted = buffer.translation;
+                            }
+                        }
+                    }, settings.stabilityDelay + settings.confirmationDelay);
+                }
+            }
+            
+            processIncrementalMode(buffer, isFinal) {
+                const newContent = this.extractNewContent(buffer.lastExtracted, buffer.translation);
+                if (newContent && newContent.trim().length > 0) {
+                    this.queuePhrase(buffer.sessionId, newContent, buffer.translation);
+                    buffer.lastExtracted = buffer.translation;
+                }
+            }
+            
+            processStableMode(buffer, isFinal) {
+                if (this.silenceTimer) clearTimeout(this.silenceTimer);
+                
+                this.silenceTimer = setTimeout(() => {
+                    const newContent = this.extractNewContent(buffer.lastExtracted, buffer.translation);
+                    if (newContent && newContent.trim().length > 0) {
+                        this.queuePhrase(buffer.sessionId, newContent, buffer.translation);
+                        buffer.lastExtracted = buffer.translation;
+                    }
+                }, isFinal ? 500 : settings.stabilityDelay);
+            }
+            
+            isPhraseComplete(text) {
+                // Check for natural phrase boundaries
+                const boundaries = ['.', '!', '?', ',', ';', ':', ' and ', ' but ', ' or ', ' so '];
+                return boundaries.some(boundary => text.endsWith(boundary));
+            }
+            
+            extractNewContent(lastSpoken, currentText) {
+                if (!lastSpoken || lastSpoken.length === 0) {
+                    return currentText;
+                }
+                
+                if (!currentText.startsWith(lastSpoken)) {
+                    // Find common prefix
+                    let commonPrefix = '';
+                    const minLen = Math.min(lastSpoken.length, currentText.length);
+                    
+                    for (let i = 0; i < minLen; i++) {
+                        if (lastSpoken[i] === currentText[i]) {
+                            commonPrefix += lastSpoken[i];
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    if (commonPrefix.length > currentText.length * 0.5) {
+                        return currentText.substring(commonPrefix.length).trim();
+                    }
+                    
+                    return currentText;
+                }
+                
+                return currentText.substring(lastSpoken.length).trim();
+            }
+            
+            queuePhrase(sessionId, phrase, fullText) {
+                this.speakQueue.push({
+                    sessionId,
+                    phrase,
+                    fullText,
+                    timestamp: Date.now()
+                });
+                
+                if (!this.isSpeaking) {
+                    this.processQueue();
+                }
+            }
+            
+            async processQueue() {
+                if (this.speakQueue.length === 0) {
+                    this.isSpeaking = false;
+                    updateSpeakingStatus(false);
+                    return;
+                }
+                
+                this.isSpeaking = true;
+                updateSpeakingStatus(true);
+                
+                const item = this.speakQueue.shift();
+                
+                // Mark phrase as speaking in UI
+                this.markPhraseSpeaking(item.sessionId, item.phrase);
+                
+                try {
+                    await this.speak(item.phrase);
+                    
+                    // Update what we've actually spoken
+                    const currentSpoken = this.spokenTextBySession.get(item.sessionId) || '';
+                    this.spokenTextBySession.set(item.sessionId, currentSpoken + (currentSpoken ? ' ' : '') + item.phrase);
+                    
+                    // Update metrics
+                    const words = item.phrase.split(' ').filter(w => w.length > 0);
+                    this.metrics.totalWords += words.length;
+                    this.metrics.phrasesSpoken++;
+                    this.metrics.phraseWordCounts.push(words.length);
+                    
+                    // Mark as spoken
+                    this.markPhraseSpoken(item.sessionId, item.phrase);
+                    
+                    updateMetrics();
+                } catch (error) {
+                    console.error('TTS error:', error);
+                }
+                
+                // Process next item
+                setTimeout(() => this.processQueue(), 100);
+            }
+            
+            speak(text) {
+                return new Promise((resolve, reject) => {
+                    if (!synthesizer) {
+                        reject('TTS not initialized');
+                        return;
+                    }
+                    
+                    synthesizer.speakTextAsync(
+                        text,
+                        result => {
+                            if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                                resolve();
+                            } else {
+                                reject(result.errorDetails);
+                            }
+                        },
+                        error => {
+                            reject(error);
+                        }
+                    );
+                });
+            }
+            
+            updateConversationDisplay(sessionId, buffer, isFinal) {
+                // Find or create conversation entry
+                let entry = this.conversationHistory.find(e => 
+                    e.sessionId === sessionId && Date.now() - e.startTime < 30000
+                );
+                
+                if (!entry) {
+                    entry = {
+                        sessionId,
+                        startTime: buffer.startTime,
+                        original: buffer.original,
+                        translation: buffer.translation,
+                        chunks: [],
+                        complete: false
+                    };
+                    this.conversationHistory.push(entry);
+                } else {
+                    entry.original = buffer.original;
+                    entry.translation = buffer.translation;
+                }
+                
+                if (isFinal && !entry.complete) {
+                    entry.complete = true;
+                    this.activeBuffers.delete(sessionId);
+                    updateBufferSize();
+                }
+                
+                updateConversationDisplay();
+            }
+            
+            markPhraseSpeaking(sessionId, phrase) {
+                const display = document.getElementById('conversationDisplay');
+                const entries = display.querySelectorAll('.conversation-entry');
+                
+                entries.forEach(entry => {
+                    if (entry.dataset.sessionId === sessionId) {
+                        const chunks = entry.querySelectorAll('.phrase-chunk');
+                        chunks.forEach(chunk => {
+                            if (chunk.textContent === phrase) {
+                                chunk.classList.add('speaking');
+                                entry.classList.add('speaking');
+                            }
+                        });
+                    }
+                });
+            }
+            
+            markPhraseSpoken(sessionId, phrase) {
+                const display = document.getElementById('conversationDisplay');
+                const entries = display.querySelectorAll('.conversation-entry');
+                
+                entries.forEach(entry => {
+                    if (entry.dataset.sessionId === sessionId) {
+                        entry.classList.remove('speaking');
+                        const chunks = entry.querySelectorAll('.phrase-chunk');
+                        chunks.forEach(chunk => {
+                            if (chunk.textContent === phrase) {
+                                chunk.classList.remove('speaking');
+                                chunk.classList.add('spoken');
+                            }
+                        });
+                    }
+                });
+            }
+            
+            getAveragePhraseSize() {
+                if (this.metrics.phraseWordCounts.length === 0) return 0;
+                const sum = this.metrics.phraseWordCounts.reduce((a, b) => a + b, 0);
+                return (sum / this.metrics.phraseWordCounts.length).toFixed(1);
+            }
+            
+            hasSignificantChange(oldText, newText) {
+                if (!oldText) return true;
+                if (oldText === newText) return false;
+                
+                // Check if new text is just a minor variation
+                const oldWords = oldText.split(' ').filter(w => w.length > 0);
+                const newWords = newText.split(' ').filter(w => w.length > 0);
+                
+                // If length difference is significant, it's a change
+                if (Math.abs(oldWords.length - newWords.length) > 2) {
+                    return true;
+                }
+                
+                // Check word-level similarity
+                let differences = 0;
+                const minLen = Math.min(oldWords.length, newWords.length);
+                for (let i = 0; i < minLen; i++) {
+                    if (oldWords[i] !== newWords[i]) {
+                        differences++;
+                    }
+                }
+                
+                // Significant if more than 20% words changed
+                return differences > minLen * 0.2;
+            }
+            
+            areSimilar(text1, text2) {
+                const words1 = text1.split(' ').filter(w => w.length > 0);
+                const words2 = text2.split(' ').filter(w => w.length > 0);
+                
+                if (Math.abs(words1.length - words2.length) > 2) {
+                    return false;
+                }
+                
+                let matches = 0;
+                const minLen = Math.min(words1.length, words2.length);
+                for (let i = 0; i < minLen; i++) {
+                    if (words1[i] === words2[i]) {
+                        matches++;
+                    }
+                }
+                
+                return matches >= minLen * 0.8;  // 80% similarity
+            }
+            
+            findRemainingText(spoken, full) {
+                // Try to find where the spoken text ends in the full text
+                const spokenWords = spoken.split(' ').filter(w => w.length > 0);
+                const fullWords = full.split(' ').filter(w => w.length > 0);
+                
+                // Find the best matching position
+                let bestMatch = 0;
+                for (let i = 0; i <= fullWords.length - spokenWords.length; i++) {
+                    let matches = 0;
+                    for (let j = 0; j < spokenWords.length; j++) {
+                        if (spokenWords[j] === fullWords[i + j]) {
+                            matches++;
+                        }
+                    }
+                    if (matches === spokenWords.length) {
+                        bestMatch = i + spokenWords.length;
+                        break;
+                    }
+                }
+                
+                if (bestMatch > 0 && bestMatch < fullWords.length) {
+                    return fullWords.slice(bestMatch).join(' ');
+                }
+                return '';
+            }
+            
+            reset() {
+                if (this.silenceTimer) {
+                    clearTimeout(this.silenceTimer);
+                    this.silenceTimer = null;
+                }
+                
+                this.conversationHistory = [];
+                this.activeBuffers.clear();
+                this.speakQueue = [];
+                this.isSpeaking = false;
+                this.spokenTextBySession.clear();
+                this.metrics = {
+                    totalWords: 0,
+                    phrasesSpoken: 0,
+                    phraseWordCounts: []
+                };
+                
+                updateMetrics();
+                updateConversationDisplay();
+            }
+        }
+        
+        // Global TTS Manager
+        let ttsManager = new OptimalTTSManager();
+        
+        // Voice configuration
+        const voiceMap = {
+            'en': 'en-US-JennyNeural',
+            'fr': 'fr-FR-DeniseNeural',
+            'es': 'es-ES-ElviraNeural',
+            'de': 'de-DE-KatjaNeural',
+            'it': 'it-IT-ElsaNeural',
+            'pt': 'pt-BR-FranciscaNeural',
+            'zh': 'zh-CN-XiaoxiaoNeural',
+            'ja': 'ja-JP-NanamiNeural',
+            'ko': 'ko-KR-SunHiNeural',
+            'ar': 'ar-SA-ZariyahNeural',
+            'ru': 'ru-RU-SvetlanaNeural',
+            'hi': 'hi-IN-SwaraNeural'
+        };
+        
+        // Language display names
+        const languageNames = {
+            'en': '🇺🇸 English',
+            'fr': '🇫🇷 French',
+            'es': '🇪🇸 Spanish',
+            'de': '🇩🇪 German',
+            'it': '🇮🇹 Italian',
+            'pt': '🇧🇷 Portuguese',
+            'zh': '🇨🇳 Chinese',
+            'ja': '🇯🇵 Japanese',
+            'ko': '🇰🇷 Korean',
+            'ar': '🇸🇦 Arabic',
+            'ru': '🇷🇺 Russian',
+            'hi': '🇮🇳 Hindi'
+        };
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            Initialize(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                initializeSocket();
+                initializeSettings();
+                
+                // Check for session code in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlSession = urlParams.get('session');
+                if (urlSession) {
+                    document.getElementById('sessionCode').value = urlSession.toUpperCase();
+                }
+                
+                // Start conversation timer
+                setInterval(updateConversationTime, 1000);
+            });
+        });
+        
+        function Initialize(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+        
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                updateConnectionStatus(true);
+            });
+            
+            socket.on('disconnect', () => {
+                updateConnectionStatus(false);
+                isConnected = false;
+            });
+            
+            socket.on('session-not-found', () => {
+                showError('Session not found. Please check the code.');
+                isConnected = false;
+            });
+            
+            socket.on('session-joined', (data) => {
+                console.log('Successfully joined session:', data);
+            });
+            
+            socket.on('speaker-disconnected', () => {
+                showError('Speaker has disconnected');
+                ttsManager.reset();
+            });
+            
+            // Handle all translation events
+            socket.on('translation-data', handleTranslation);
+            socket.on('translation-data-ultra', handleTranslation);
+        }
+        
+        function initializeSettings() {
+            // Phrase threshold
+            const phraseThreshold = document.getElementById('phraseThreshold');
+            phraseThreshold.addEventListener('input', (e) => {
+                settings.phraseThreshold = parseInt(e.target.value);
+                document.getElementById('phraseThresholdValue').textContent = e.target.value;
+            });
+            
+            // Stability delay
+            const stabilityDelay = document.getElementById('stabilityDelay');
+            stabilityDelay.addEventListener('input', (e) => {
+                settings.stabilityDelay = parseInt(e.target.value);
+                document.getElementById('stabilityDelayValue').textContent = (e.target.value / 1000).toFixed(1) + 's';
+            });
+            
+            // Speech rate
+            const speechRate = document.getElementById('speechRate');
+            speechRate.addEventListener('input', (e) => {
+                settings.speechRate = parseFloat(e.target.value);
+                document.getElementById('speechRateValue').textContent = e.target.value + 'x';
+                updateSpeechRate();
+            });
+            
+            // Min change words
+            const minChangeWords = document.getElementById('minChangeWords');
+            minChangeWords.addEventListener('input', (e) => {
+                settings.minChangeWords = parseInt(e.target.value);
+                document.getElementById('minChangeWordsValue').textContent = e.target.value;
+            });
+        }
+        
+        function selectLanguage(element) {
+            document.querySelectorAll('.lang-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            element.classList.add('active');
+            targetLanguage = element.dataset.lang;
+        }
+        
+        function selectMode(element) {
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            element.classList.add('active');
+            translationMode = element.dataset.mode;
+        }
+        
+        async function joinSession() {
+            const code = document.getElementById('sessionCode').value.trim().toUpperCase();
+            if (code.length !== 4) {
+                showError('Please enter a 4-character session code');
+                return;
+            }
+            
+            sessionCode = code;
+            
+            // Initialize TTS
+            try {
+                await initializeTTS();
+            } catch (error) {
+                showError('Failed to initialize text-to-speech');
+                return;
+            }
+            
+            // Join session
+            socket.emit('listener-join', {
+                sessionCode: sessionCode,
+                targetLanguage: targetLanguage
+            });
+            
+            isConnected = true;
+            conversationStartTime = Date.now();
+            
+            // Update UI
+            document.getElementById('joinBtn').style.display = 'none';
+            document.getElementById('leaveBtn').style.display = 'block';
+            document.getElementById('sessionCode').disabled = true;
+            document.querySelectorAll('.lang-option').forEach(opt => {
+                opt.style.pointerEvents = 'none';
+            });
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.style.pointerEvents = 'none';
+            });
+            
+            showSuccess(`Joined session ${sessionCode} in ${translationMode} mode`);
+            clearTranscript();
+        }
+        
+        function leaveSession() {
+            if (sessionCode) {
+                socket.emit('listener-leave', { sessionCode });
+            }
+            
+            isConnected = false;
+            sessionCode = null;
+            conversationStartTime = null;
+            
+            // Clean up TTS
+            if (synthesizer) {
+                synthesizer.close();
+                synthesizer = null;
+            }
+            
+            // Reset manager
+            ttsManager.reset();
+            
+            // Update UI
+            document.getElementById('joinBtn').style.display = 'block';
+            document.getElementById('leaveBtn').style.display = 'none';
+            document.getElementById('sessionCode').disabled = false;
+            document.getElementById('sessionCode').value = '';
+            document.querySelectorAll('.lang-option').forEach(opt => {
+                opt.style.pointerEvents = 'auto';
+            });
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.style.pointerEvents = 'auto';
+            });
+            
+            clearTranscript();
+        }
+        
+        async function initializeTTS() {
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    serviceRegion
+                );
+                
+                // Set voice based on target language
+                const selectedVoice = voiceMap[targetLanguage] || 'en-US-JennyNeural';
+                speechConfig.speechSynthesisVoiceName = selectedVoice;
+                
+                // Set speech rate
+                speechConfig.speechSynthesisOutputFormat = SpeechSDK.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+                
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultSpeakerOutput();
+                synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig, audioConfig);
+                
+                updateSpeechRate();
+            } catch (error) {
+                throw error;
+            }
+        }
+        
+        function updateSpeechRate() {
+            if (synthesizer) {
+                // Note: Azure TTS doesn't directly support rate in the config
+                // You would need to use SSML for rate control
+            }
+        }
+        
+        function handleTranslation(data) {
+            if (!isConnected || !data.translation || data.translation === data.original) {
+                return;
+            }
+            
+            // Update receiving status
+            updateReceivingStatus(true);
+            setTimeout(() => updateReceivingStatus(false), 500);
+            
+            // Create session ID
+            const sessionId = `${data.sourceLanguage}-${Math.floor(data.timestamp / 30000)}`;
+            
+            // Process translation
+            ttsManager.processTranslation(
+                sessionId,
+                data.original,
+                data.translation,
+                data.confidence || 0.9,
+                data.isFinal
+            );
+            
+            // Update latency
+            document.getElementById('latencyMs').textContent = data.latency || Math.floor(Date.now() - data.timestamp);
+        }
+        
+        function updateConversationDisplay() {
+            const display = document.getElementById('conversationDisplay');
+            
+            // Clear placeholder if needed
+            if (display.querySelector('div[style*="color: #666"]')) {
+                display.innerHTML = '';
+            }
+            
+            // Don't clear all content, just update
+            ttsManager.conversationHistory.forEach((entry, index) => {
+                let entryDiv = display.querySelector(`[data-session-id="${entry.sessionId}"]`);
+                
+                if (!entryDiv) {
+                    entryDiv = document.createElement('div');
+                    entryDiv.className = 'conversation-entry';
+                    entryDiv.dataset.sessionId = entry.sessionId;
+                    display.appendChild(entryDiv);
+                }
+                
+                const sourceLang = entry.sessionId.split('-')[0];
+                const targetLang = targetLanguage;
+                
+                // Split translation into chunks based on what's been actually spoken
+                const actuallySpoken = ttsManager.spokenTextBySession.get(entry.sessionId) || '';
+                
+                let chunks = [];
+                if (actuallySpoken && entry.translation.startsWith(actuallySpoken)) {
+                    // Spoken part
+                    if (actuallySpoken.length > 0) {
+                        chunks.push({ text: actuallySpoken, spoken: true });
+                    }
+                    // Unspoken part
+                    const unspoken = entry.translation.substring(actuallySpoken.length).trim();
+                    if (unspoken.length > 0) {
+                        chunks.push({ text: unspoken, spoken: false });
+                    }
+                } else if (actuallySpoken) {
+                    // Show what we've actually spoken
+                    chunks.push({ text: actuallySpoken, spoken: true });
+                    // Find remaining unspoken text
+                    const remaining = ttsManager.findRemainingText(actuallySpoken, entry.translation);
+                    if (remaining) {
+                        chunks.push({ text: remaining, spoken: false });
+                    }
+                } else {
+                    // Full text if not started
+                    chunks.push({ text: entry.translation, spoken: false });
+                }
+                
+                entryDiv.innerHTML = `
+                    <div class="phrase-indicator${entry.complete ? ' complete' : ''}">
+                        ${entry.complete ? '✓ Complete' : '◉ Active'}
+                    </div>
+                    <div class="entry-header">
+                        <span class="entry-lang">
+                            ${languageNames[sourceLang] || sourceLang} → ${languageNames[targetLang] || targetLang}
+                        </span>
+                        <span class="entry-time">${new Date(entry.startTime).toLocaleTimeString()}</span>
+                    </div>
+                    <div class="original-text">${entry.original}</div>
+                    <div class="translation-text">
+                        ${chunks.map(chunk => 
+                            `<span class="phrase-chunk${chunk.spoken ? ' spoken' : ''}">${chunk.text}</span>`
+                        ).join(' ')}
+                    </div>
+                `;
+            });
+            
+            // Keep only recent entries (last 20)
+            const entries = display.querySelectorAll('.conversation-entry');
+            if (entries.length > 20) {
+                entries[0].remove();
+            }
+            
+            display.scrollTop = display.scrollHeight;
+        }
+        
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('connectionDot');
+            const status = document.getElementById('connectionStatus');
+            
+            if (connected) {
+                dot.classList.add('active');
+                status.textContent = 'Connected';
+            } else {
+                dot.classList.remove('active');
+                status.textContent = 'Disconnected';
+            }
+        }
+        
+        function updateReceivingStatus(receiving) {
+            const dot = document.getElementById('receivingDot');
+            const status = document.getElementById('receivingStatus');
+            
+            if (receiving) {
+                dot.classList.add('active');
+                status.textContent = 'Receiving';
+            } else {
+                dot.classList.remove('active');
+                status.textContent = 'Waiting...';
+            }
+        }
+        
+        function updateSpeakingStatus(speaking) {
+            const dot = document.getElementById('speakingDot');
+            const status = document.getElementById('speakingStatus');
+            
+            if (speaking) {
+                dot.classList.add('speaking');
+                status.textContent = 'Speaking';
+            } else {
+                dot.classList.remove('speaking');
+                status.textContent = 'Silent';
+            }
+        }
+        
+        function updateMetrics() {
+            document.getElementById('totalWords').textContent = ttsManager.metrics.totalWords;
+            document.getElementById('phrasesSpoken').textContent = ttsManager.metrics.phrasesSpoken;
+            document.getElementById('avgPhraseSize').textContent = ttsManager.getAveragePhraseSize() || '--';
+        }
+        
+        function updateBufferSize() {
+            document.getElementById('bufferSize').textContent = ttsManager.activeBuffers.size;
+        }
+        
+        function updateConversationTime() {
+            if (conversationStartTime) {
+                const elapsed = Math.floor((Date.now() - conversationStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.getElementById('conversationTime').textContent = 
+                    `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+        }
+        
+        function clearTranscript() {
+            ttsManager.conversationHistory = [];
+            const display = document.getElementById('conversationDisplay');
+            if (isConnected) {
+                display.innerHTML = '<div style="color: #666; text-align: center; margin-top: 50px;">Waiting for speaker...</div>';
+            } else {
+                display.innerHTML = '<div style="color: #666; text-align: center; margin-top: 50px;">Join a session to see live translations...</div>';
+            }
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

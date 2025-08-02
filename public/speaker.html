@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Speaker - Simultaneous Translation Broadcaster</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #1a1a1a;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #66d9ef;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .session-info {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .session-code {
+            font-size: 3em;
+            font-weight: bold;
+            color: #66d9ef;
+            letter-spacing: 10px;
+            margin: 20px 0;
+            font-family: monospace;
+        }
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: #2a2a2a;
+            border-radius: 20px;
+            margin: 20px 0;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #888;
+        }
+        .status-dot.connected { background: #66bb6a; }
+        .status-dot.broadcasting { 
+            background: #ff6b6b; 
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .control-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .control-group {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .control-group h3 {
+            color: #66d9ef;
+            margin: 0 0 15px 0;
+            font-size: 1.1em;
+        }
+        select, button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #2a2a2a;
+            color: #e0e0e0;
+            font-size: 15px;
+        }
+        button {
+            background: #66d9ef;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button:hover:not(:disabled) {
+            background: #4fc3d1;
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 30px 0;
+        }
+        .metric-box {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #66d9ef;
+        }
+        .metric-label {
+            font-size: 0.8em;
+            color: #888;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        .visualization {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .audio-visualizer {
+            height: 120px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .frequency-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 100%;
+            padding: 20px;
+        }
+        .freq-bar {
+            width: 6px;
+            background: linear-gradient(to top, #66d9ef, #4fc3d1);
+            border-radius: 3px 3px 0 0;
+            transition: height 0.1s ease;
+        }
+        .transcript-display {
+            margin-top: 20px;
+            padding: 20px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            min-height: 150px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .transcript-segment {
+            margin: 10px 0;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            border-left: 3px solid #66d9ef;
+        }
+        .transcript-segment.broadcasting {
+            border-left-color: #ff6b6b;
+            background: #2a2020;
+        }
+        .listeners-panel {
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            background: #242424;
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 200px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .listener-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            margin: 5px 0;
+            background: #2a2a2a;
+            border-radius: 5px;
+        }
+        .listener-lang {
+            font-size: 0.85em;
+            color: #888;
+        }
+        .share-section {
+            background: #242424;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .share-url {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .share-url input {
+            flex: 1;
+            padding: 10px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-family: monospace;
+        }
+        .copy-btn {
+            padding: 10px 20px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .copy-btn:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="listeners-panel">
+        <h4 style="margin: 0 0 10px 0; color: #66d9ef;">Active Listeners</h4>
+        <div id="listenersList">
+            <div style="color: #666; font-size: 0.9em;">No listeners yet</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1>🎙️ Speaker - Translation Broadcaster</h1>
+        <p class="subtitle">Speak in your language, listeners hear in theirs</p>
+        
+        <div class="session-info">
+            <h3>Session Code</h3>
+            <div class="session-code" id="sessionCode">----</div>
+            <div class="connection-status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Initializing...</span>
+            </div>
+            <p style="color: #888; margin-top: 10px;">Share this code with listeners to join your translation session</p>
+        </div>
+        
+        <div class="control-panel">
+            <div class="control-group">
+                <h3>Your Language</h3>
+                <select id="sourceLanguage">
+                    <option value="en-US">English (US)</option>
+                    <option value="es-ES">Spanish</option>
+                    <option value="fr-FR">French</option>
+                    <option value="de-DE">German</option>
+                    <option value="zh-CN">Chinese (Mandarin)</option>
+                    <option value="ja-JP">Japanese</option>
+                    <option value="ko-KR">Korean</option>
+                    <option value="it-IT">Italian</option>
+                    <option value="pt-BR">Portuguese (Brazil)</option>
+                    <option value="ru-RU">Russian</option>
+                    <option value="ar-SA">Arabic</option>
+                    <option value="hi-IN">Hindi</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <h3>Translation Settings</h3>
+                <label style="display: block; margin: 10px 0;">
+                    <input type="checkbox" id="enablePartials" checked>
+                    Enable real-time streaming (lower latency)
+                </label>
+                <label style="display: block; margin: 10px 0;">
+                    <input type="checkbox" id="enableCaptions" checked>
+                    Send live captions to listeners
+                </label>
+            </div>
+        </div>
+        
+        <button id="startBtn" onclick="startBroadcasting()">
+            🚀 Start Broadcasting
+        </button>
+        <button id="stopBtn" onclick="stopBroadcasting()" disabled>
+            ⏹️ Stop Broadcasting
+        </button>
+        
+        <div class="metrics-grid">
+            <div class="metric-box">
+                <div class="metric-value" id="listenersCount">0</div>
+                <div class="metric-label">Listeners</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="languagesCount">0</div>
+                <div class="metric-label">Languages</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="wordsCount">0</div>
+                <div class="metric-label">Words/Min</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-value" id="latencyMetric">--</div>
+                <div class="metric-label">Latency (ms)</div>
+            </div>
+        </div>
+        
+        <div class="visualization">
+            <h3 style="margin: 0 0 20px 0; color: #66d9ef;">Audio Input</h3>
+            <div class="audio-visualizer">
+                <div class="frequency-bars" id="frequencyBars"></div>
+            </div>
+            
+            <div class="transcript-display" id="transcriptDisplay">
+                <div style="color: #666; text-align: center;">Your speech will appear here...</div>
+            </div>
+        </div>
+        
+        <div class="share-section">
+            <h3 style="color: #66d9ef; margin-bottom: 10px;">Share with Listeners</h3>
+            <div class="share-url">
+                <input type="text" id="shareUrl" readonly>
+                <button class="copy-btn" onclick="copyShareUrl()">Copy</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3003/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let recognizer;
+        let socket;
+        let sessionCode;
+        let isBroadcasting = false;
+        
+        // Metrics
+        let startTime;
+        let wordCount = 0;
+        let listeners = new Map();
+        
+        // Audio visualization
+        let audioContext;
+        let analyser;
+        let microphone;
+        let dataArray;
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            Initialize(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                initializeSocket();
+                initializeAudioVisualizer();
+                generateSessionCode();
+            });
+        });
+        
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                updateStatus('connected', '🟢 Connected to server');
+                if (sessionCode) {
+                    socket.emit('speaker-join', { 
+                        sessionCode, 
+                        sourceLanguage: document.getElementById('sourceLanguage').value 
+                    });
+                }
+            });
+            
+            socket.on('listener-joined', (data) => {
+                listeners.set(data.listenerId, data);
+                updateListenersDisplay();
+                updateMetrics();
+            });
+            
+            socket.on('listener-left', (data) => {
+                listeners.delete(data.listenerId);
+                updateListenersDisplay();
+                updateMetrics();
+            });
+            
+            socket.on('disconnect', () => {
+                updateStatus('disconnected', '🔴 Disconnected from server');
+            });
+        }
+        
+        function generateSessionCode() {
+            sessionCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+            document.getElementById('sessionCode').textContent = sessionCode;
+            updateShareUrl();
+            
+            if (socket && socket.connected) {
+                socket.emit('speaker-join', { 
+                    sessionCode, 
+                    sourceLanguage: document.getElementById('sourceLanguage').value 
+                });
+            }
+        }
+        
+        function updateShareUrl() {
+            const url = `${window.location.origin}/public/listener.html?session=${sessionCode}`;
+            document.getElementById('shareUrl').value = url;
+        }
+        
+        function copyShareUrl() {
+            const input = document.getElementById('shareUrl');
+            input.select();
+            document.execCommand('copy');
+            
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = originalText, 2000);
+        }
+        
+        function initializeAudioVisualizer() {
+            const bars = document.getElementById('frequencyBars');
+            for (let i = 0; i < 32; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'freq-bar';
+                bar.style.height = '20px';
+                bars.appendChild(bar);
+            }
+        }
+        
+        async function RequestAuthorizationToken() {
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                return res.data.region;
+            } catch (err) {
+                console.error('Failed to get authorization token:', err);
+                throw err;
+            }
+        }
+        
+        async function startBroadcasting() {
+            try {
+                updateStatus('broadcasting', '🔴 Broadcasting...');
+                
+                await RequestAuthorizationToken();
+                
+                const sourceLanguage = document.getElementById('sourceLanguage').value;
+                
+                // Create speech config
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken, 
+                    serviceRegion
+                );
+                
+                speechConfig.speechRecognitionLanguage = sourceLanguage;
+                
+                // Enable detailed output for better transcription
+                speechConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+                speechConfig.setProperty(
+                    SpeechSDK.PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority,
+                    "Latency"
+                );
+                
+                // Create audio config
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                
+                // Create recognizer
+                recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+                
+                // Set up event handlers
+                setupRecognizerEvents();
+                
+                // Start continuous recognition
+                recognizer.startContinuousRecognitionAsync(
+                    () => {
+                        isBroadcasting = true;
+                        startTime = Date.now();
+                        document.getElementById('startBtn').disabled = true;
+                        document.getElementById('stopBtn').disabled = false;
+                        startAudioVisualization();
+                    },
+                    (err) => {
+                        console.error('Failed to start recognition:', err);
+                        updateStatus('connected', '🟢 Connected (not broadcasting)');
+                    }
+                );
+                
+            } catch (error) {
+                console.error('Failed to start broadcasting:', error);
+                updateStatus('connected', '🟢 Connected (error starting)');
+            }
+        }
+        
+        function setupRecognizerEvents() {
+            let lastPartial = '';
+            
+            // Recognizing event - partial results
+            recognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
+                    const text = e.result.text;
+                    
+                    // Update transcript display
+                    updateTranscriptPartial(text);
+                    
+                    // Send partial results if enabled
+                    if (document.getElementById('enablePartials').checked && text !== lastPartial) {
+                        socket.emit('speech-partial', {
+                            sessionCode,
+                            text: text,
+                            timestamp: Date.now()
+                        });
+                        lastPartial = text;
+                    }
+                    
+                    updateLatencyMetric();
+                }
+            };
+            
+            // Recognized event - final results
+            recognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                    const text = e.result.text;
+                    
+                    if (text) {
+                        // Update transcript display
+                        updateTranscriptFinal(text);
+                        
+                        // Send final result
+                        socket.emit('speech-final', {
+                            sessionCode,
+                            text: text,
+                            timestamp: Date.now(),
+                            confidence: e.result.confidence || 0.95
+                        });
+                        
+                        // Update metrics
+                        const words = text.split(' ').length;
+                        wordCount += words;
+                        updateWordRate();
+                        
+                        lastPartial = '';
+                    }
+                }
+            };
+            
+            // Error handling
+            recognizer.canceled = (s, e) => {
+                console.error('Recognition canceled:', e.errorDetails);
+                stopBroadcasting();
+            };
+        }
+        
+        function stopBroadcasting() {
+            isBroadcasting = false;
+            
+            if (recognizer) {
+                recognizer.stopContinuousRecognitionAsync(
+                    () => {
+                        updateStatus('connected', '🟢 Connected (not broadcasting)');
+                        document.getElementById('startBtn').disabled = false;
+                        document.getElementById('stopBtn').disabled = true;
+                        recognizer.close();
+                        recognizer = undefined;
+                        stopAudioVisualization();
+                    },
+                    (err) => console.error('Error stopping:', err)
+                );
+            }
+            
+            socket.emit('speaker-stop', { sessionCode });
+        }
+        
+        function startAudioVisualization() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    microphone = audioContext.createMediaStreamSource(stream);
+                    microphone.connect(analyser);
+                    dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    visualize();
+                })
+                .catch(err => console.error('Error accessing microphone:', err));
+        }
+        
+        function visualize() {
+            if (!isBroadcasting) return;
+            
+            requestAnimationFrame(visualize);
+            analyser.getByteFrequencyData(dataArray);
+            
+            const bars = document.querySelectorAll('.freq-bar');
+            const step = Math.floor(dataArray.length / bars.length);
+            
+            bars.forEach((bar, i) => {
+                const value = dataArray[i * step];
+                const height = (value / 255) * 100;
+                bar.style.height = Math.max(5, height) + 'px';
+            });
+        }
+        
+        function stopAudioVisualization() {
+            if (microphone) {
+                microphone.disconnect();
+                microphone = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            // Reset bars
+            document.querySelectorAll('.freq-bar').forEach(bar => {
+                bar.style.height = '20px';
+            });
+        }
+        
+        function updateTranscriptPartial(text) {
+            const display = document.getElementById('transcriptDisplay');
+            let partial = display.querySelector('.partial-segment');
+            
+            if (!partial) {
+                partial = document.createElement('div');
+                partial.className = 'transcript-segment partial-segment';
+                partial.style.opacity = '0.7';
+                display.appendChild(partial);
+            }
+            
+            partial.textContent = text;
+            display.scrollTop = display.scrollHeight;
+        }
+        
+        function updateTranscriptFinal(text) {
+            const display = document.getElementById('transcriptDisplay');
+            
+            // Remove partial
+            const partial = display.querySelector('.partial-segment');
+            if (partial) partial.remove();
+            
+            // Add final
+            const segment = document.createElement('div');
+            segment.className = 'transcript-segment broadcasting';
+            segment.innerHTML = `
+                <div style="font-size: 0.8em; color: #666; margin-bottom: 5px;">
+                    ${new Date().toLocaleTimeString()}
+                </div>
+                <div>${text}</div>
+            `;
+            
+            display.appendChild(segment);
+            display.scrollTop = display.scrollHeight;
+            
+            // Keep only last 10 segments
+            const segments = display.querySelectorAll('.transcript-segment');
+            if (segments.length > 10) {
+                segments[0].remove();
+            }
+        }
+        
+        function updateListenersDisplay() {
+            const list = document.getElementById('listenersList');
+            
+            if (listeners.size === 0) {
+                list.innerHTML = '<div style="color: #666; font-size: 0.9em;">No listeners yet</div>';
+                return;
+            }
+            
+            list.innerHTML = '';
+            listeners.forEach(listener => {
+                const item = document.createElement('div');
+                item.className = 'listener-item';
+                item.innerHTML = `
+                    <div class="status-dot connected"></div>
+                    <div>
+                        <div>Listener ${listener.listenerId.substring(0, 6)}</div>
+                        <div class="listener-lang">${listener.targetLanguage || 'Unknown'}</div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+        
+        function updateMetrics() {
+            // Update listener count
+            document.getElementById('listenersCount').textContent = listeners.size;
+            
+            // Update language count
+            const languages = new Set();
+            listeners.forEach(l => languages.add(l.targetLanguage));
+            document.getElementById('languagesCount').textContent = languages.size;
+        }
+        
+        function updateWordRate() {
+            if (startTime) {
+                const minutes = (Date.now() - startTime) / 60000;
+                const rate = Math.round(wordCount / minutes);
+                document.getElementById('wordsCount').textContent = rate;
+            }
+        }
+        
+        function updateLatencyMetric() {
+            const latency = 50 + Math.floor(Math.random() * 100); // Simulated for now
+            document.getElementById('latencyMetric').textContent = latency;
+        }
+        
+        function updateStatus(type, message) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            
+            dot.className = 'status-dot ' + type;
+            text.textContent = message;
+        }
+        
+        // SDK initialization
+        function Initialize(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+    </script>
+</body>
+</html>

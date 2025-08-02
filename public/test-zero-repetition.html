@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Zero Repetition System</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .log-output {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        button {
+            background: #0078d4;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .metric {
+            background: #e6f2ff;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0078d4;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Zero Repetition System</h1>
+        
+        <div class="test-section">
+            <h2>Simulate Streaming Translation</h2>
+            <button onclick="simulateStreamingTranslation()">Simulate Arabic Translation</button>
+            <button onclick="simulateFrenchTranslation()">Simulate French Translation</button>
+            <button onclick="clearLogs()">Clear Logs</button>
+            
+            <div class="metrics">
+                <div class="metric">
+                    <div class="metric-value" id="totalWords">0</div>
+                    <div class="metric-label">Total Words</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="uniqueChunks">0</div>
+                    <div class="metric-label">Unique Chunks</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="duplicatesPrevented">0</div>
+                    <div class="metric-label">Duplicates Prevented</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="ttsPlayed">0</div>
+                    <div class="metric-label">TTS Played</div>
+                </div>
+            </div>
+            
+            <h3>Input Stream:</h3>
+            <div class="log-output" id="inputLog"></div>
+            
+            <h3>TTS Output (What Would Be Spoken):</h3>
+            <div class="log-output" id="outputLog"></div>
+            
+            <h3>Deduplication Log:</h3>
+            <div class="log-output" id="dedupLog"></div>
+        </div>
+    </div>
+
+    <script>
+        // Import the deduplication logic from the zero-repetition listener
+        class ContentFingerprinter {
+            constructor() {
+                this.cache = new Map();
+            }
+
+            normalizeText(text) {
+                return text.toLowerCase()
+                    .replace(/[^\w\s]/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+
+            hashText(text) {
+                let hash = 0;
+                for (let i = 0; i < text.length; i++) {
+                    const char = text.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash;
+                }
+                return hash.toString(36);
+            }
+
+            generateStructureHash(text) {
+                const words = text.split(/\s+/);
+                const structure = words.map(w => w.length).join('-');
+                return this.hashText(structure);
+            }
+
+            generateSemanticHash(words) {
+                const significantWords = words.filter(w => w.length > 3);
+                return this.hashText(significantWords.sort().join(' '));
+            }
+
+            generateFingerprints(text) {
+                const normalized = this.normalizeText(text);
+                const words = normalized.split(' ').filter(w => w.length > 0);
+                
+                const fingerprints = {
+                    exact: this.hashText(text),
+                    normalized: this.hashText(normalized),
+                    wordSet: this.hashText(words.sort().join(' ')),
+                    structure: this.generateStructureHash(text),
+                    semantic: this.generateSemanticHash(words)
+                };
+                
+                return fingerprints;
+            }
+
+            isDuplicate(text, existingFingerprints, threshold = 0.75) {
+                const newFingerprints = this.generateFingerprints(text);
+                
+                for (const existing of existingFingerprints) {
+                    let matchCount = 0;
+                    const totalChecks = 5;
+                    
+                    if (newFingerprints.exact === existing.exact) matchCount++;
+                    if (newFingerprints.normalized === existing.normalized) matchCount++;
+                    if (newFingerprints.wordSet === existing.wordSet) matchCount++;
+                    if (newFingerprints.structure === existing.structure) matchCount++;
+                    if (newFingerprints.semantic === existing.semantic) matchCount++;
+                    
+                    const similarity = matchCount / totalChecks;
+                    
+                    if (similarity >= threshold) {
+                        return {
+                            isDuplicate: true,
+                            similarity,
+                            matchedWith: existing
+                        };
+                    }
+                }
+                
+                return {
+                    isDuplicate: false,
+                    fingerprints: newFingerprints
+                };
+            }
+        }
+
+        // Test harness
+        const fingerprinter = new ContentFingerprinter();
+        const processedFingerprints = [];
+        const metrics = {
+            totalWords: 0,
+            uniqueChunks: 0,
+            duplicatesPrevented: 0,
+            ttsPlayed: 0
+        };
+
+        function updateMetrics() {
+            document.getElementById('totalWords').textContent = metrics.totalWords;
+            document.getElementById('uniqueChunks').textContent = metrics.uniqueChunks;
+            document.getElementById('duplicatesPrevented').textContent = metrics.duplicatesPrevented;
+            document.getElementById('ttsPlayed').textContent = metrics.ttsPlayed;
+        }
+
+        function logInput(text) {
+            const log = document.getElementById('inputLog');
+            log.textContent += `[${new Date().toLocaleTimeString()}] ${text}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function logOutput(text) {
+            const log = document.getElementById('outputLog');
+            log.textContent += `[${new Date().toLocaleTimeString()}] TTS: "${text}"\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function logDedup(message) {
+            const log = document.getElementById('dedupLog');
+            log.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function processTranslationChunk(text) {
+            logInput(`Received: "${text}"`);
+            
+            metrics.totalWords += text.split(' ').length;
+            
+            const result = fingerprinter.isDuplicate(text, processedFingerprints);
+            
+            if (result.isDuplicate) {
+                metrics.duplicatesPrevented++;
+                logDedup(`✗ Duplicate detected (${Math.round(result.similarity * 100)}% similar)`);
+            } else {
+                processedFingerprints.push(result.fingerprints);
+                metrics.uniqueChunks++;
+                metrics.ttsPlayed++;
+                logOutput(text);
+                logDedup(`✓ New content - Playing TTS`);
+            }
+            
+            updateMetrics();
+        }
+
+        async function simulateStreamingTranslation() {
+            // Simulate the problematic Arabic translation pattern
+            const chunks = [
+                "مرحبا",
+                "مرحبا بك",
+                "مرحبا بك في",
+                "مرحبا بك في العرض",
+                "مرحبا بك في العرض التوضيحي",
+                "مرحبا بك في العرض التوضيحي للترجمة",
+                "مرحبا بك في العرض التوضيحي للترجمة الفورية"
+            ];
+
+            for (const chunk of chunks) {
+                processTranslationChunk(chunk);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        async function simulateFrenchTranslation() {
+            // Simulate French streaming translation
+            const chunks = [
+                "Bonjour",
+                "Bonjour et",
+                "Bonjour et bienvenue", 
+                "Bonjour et bienvenue à",
+                "Bonjour et bienvenue à la",
+                "Bonjour et bienvenue à la démonstration",
+                "Bonjour et bienvenue à la démonstration de",
+                "Bonjour et bienvenue à la démonstration de traduction"
+            ];
+
+            for (const chunk of chunks) {
+                processTranslationChunk(chunk);
+                await new Promise(resolve => setTimeout(resolve, 400));
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('inputLog').textContent = '';
+            document.getElementById('outputLog').textContent = '';
+            document.getElementById('dedupLog').textContent = '';
+            processedFingerprints.length = 0;
+            Object.keys(metrics).forEach(key => metrics[key] = 0);
+            updateMetrics();
+        }
+    </script>
+</body>
+</html>
