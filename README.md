@@ -1,169 +1,234 @@
-# Azure Speech Translation Demos
+# Real-Time Speech-to-Speech Translation System
 
-Real-time bilingual speech recognition and translation demos using Azure Cognitive Services Speech SDK.
+A professional real-time speech translation system that enables seamless communication across language barriers using Azure Cognitive Services.
 
 ## Features
 
-- **Bilingual Speech Recognition**: Automatic detection of French Canadian and English speech
-- **Real-time Translation**: Simultaneous translation to 12+ languages with ultra-low latency
-- **Zero-Repetition TTS**: Advanced deduplication system ensures translations are spoken only once
-- **Session-Based Architecture**: Speaker/listener model with WebSocket communication
-- **Multiple Demo Implementations**: Progressive enhancements from basic to advanced features
+- 🎙️ **Real-time speech recognition** with automatic language detection (French Canadian & English)
+- 🌐 **Live translation** to multiple target languages
+- 🔊 **Text-to-Speech output** with natural neural voices
+- 📡 **WebSocket-based streaming** for minimal latency
+- 💻 **Professional UI** with real-time metrics and status indicators
+- 🔐 **Secure token-based authentication** (no API keys in client code)
 
 ## Prerequisites
 
-* Azure Speech Service subscription key - [Try the speech service for free](https://docs.microsoft.com/azure/cognitive-services/speech-service/get-started)
-* Azure Translator Service subscription key (for translation features)
-* Node.js 14+ and npm
-* Modern web browser (Chrome, Firefox, Safari, Edge)
+- Node.js (v14 or higher)
+- npm or yarn
+- Azure Cognitive Services subscription with:
+  - Speech Services
+  - Translator Services
 
 ## Quick Start
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/mtliou/azure-speech-translation-demos.git
-   cd azure-speech-translation-demos
-   ```
+### 1. Clone the repository
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+```bash
+git clone [your-repo-url]
+cd [repo-name]
+```
 
-3. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your Azure credentials
-   ```
+### 2. Install dependencies
 
-4. **Start the servers**
-   ```bash
-   # Terminal 1: Express server for token exchange (port 3003)
-   npm run server
+```bash
+npm install
+```
 
-   # Terminal 2: Socket.io server for real-time communication (port 3000)
-   node server/websocket-server.js
+### 3. Configure environment variables
 
-   # Terminal 3: HTTP server for static files (port 8080)
-   npm run http-server
-   ```
+Copy `.env.example` to `.env` and add your Azure credentials:
 
-5. **Access the demos**
-   - Translation Demos Index: http://localhost:8080/public/translation-demos.html
-   - Speaker (Bilingual): http://localhost:8080/public/speaker-bilingual-auto.html
-   - Listener (Zero Repetition): http://localhost:8080/public/listener-zero-repetition.html
+```bash
+cp .env.example .env
+```
 
-## Key Components
+Edit `.env` with your Azure credentials:
+```
+SPEECH_KEY=your_azure_speech_key
+SPEECH_REGION=your_azure_region
+TRANSLATOR_KEY=your_azure_translator_key
+TRANSLATOR_REGION=your_azure_region
+```
 
-### Speaker Interface (`speaker-bilingual-auto.html`)
-- Continuous bilingual speech recognition (French Canadian/English)
-- Real-time transcription display
+### 4. Start the servers
+
+```bash
+# Make the script executable (first time only)
+chmod +x start-all-servers.sh
+
+# Start both Express and WebSocket servers
+./start-all-servers.sh
+```
+
+The servers will start on:
+- Express server: http://localhost:3001
+- WebSocket server: ws://localhost:3004
+
+## Usage
+
+### Main Interface
+Open http://localhost:3001/main-index.html to access the main page with links to all components.
+
+### Speaker (Broadcaster)
+1. Open http://localhost:3001/speaker-professional.html
+2. Click "Start Session" to generate a session code
+3. Click "Start Broadcasting" to begin speech recognition
+4. Speak in French Canadian or English - the system will auto-detect
+
+### Listener (Translator)
+1. Open http://localhost:3001/listener-professional.html
+2. Enter the session code from the speaker
+3. Select your target language (e.g., Spanish, German, Japanese)
+4. Click "Join Session" to receive live translations
+5. Translations will be spoken automatically via TTS
+
+### Testing Connection
+Open http://localhost:3001/test-speech-connection.html to verify Speech SDK connectivity.
+
+## Project Structure
+
+```
+.
+├── server/
+│   ├── index.js              # Express server for token exchange
+│   └── websocket-server.js   # WebSocket server for real-time communication
+├── public/
+│   ├── speaker-professional.html    # Speaker/broadcaster interface
+│   ├── listener-professional.html   # Listener/translator interface
+│   ├── test-speech-connection.html  # Connection testing utility
+│   └── main-index.html             # Main navigation page
+├── package.json              # Node.js dependencies
+├── start-all-servers.sh      # Server startup script
+├── .env.example             # Environment variables template
+└── README.md                # This file
+```
+
+## Key Files Explained
+
+### `server/index.js`
+Express server that:
+- Serves static files from the public directory
+- Provides `/api/get-speech-token` endpoint for secure token exchange
+- Prevents exposure of Azure API keys to the client
+
+### `server/websocket-server.js`
+WebSocket server that:
+- Manages real-time communication between speakers and listeners
+- Handles translation requests using Azure Translator
+- Manages session creation and participant tracking
+- Implements smart language detection and fallback logic
+
+### `public/speaker-professional.html`
+Speaker interface featuring:
+- Automatic language detection (French Canadian & English)
+- Real-time speech recognition with partial results
 - Session code generation for listeners to join
-- WebSocket broadcasting of recognized speech
+- Professional UI with metrics display
 
-### Listener Interface (`listener-zero-repetition.html`)
-- Joins speaker sessions via session code
-- Real-time translation to selected target language
-- Advanced deduplication system prevents TTS repetition
-- Support for 12+ target languages including:
-  - Arabic, Chinese (Simplified/Traditional), French, German
-  - Italian, Japanese, Korean, Portuguese, Russian, Spanish
-
-### Zero-Repetition System
-The listener implements a sophisticated deduplication system:
-- **Content Fingerprinting**: Multiple hash types for robust duplicate detection
-- **State Machine**: Tracks translation chunk lifecycle
-- **Smart Buffering**: Configurable delays for stability
-- **Metrics Tracking**: Real-time statistics on deduplication effectiveness
+### `public/listener-professional.html`
+Listener interface featuring:
+- Session joining via code
+- Multiple target language selection
+- Streaming TTS with smart text segmentation
+- Queue management for smooth audio playback
 
 ## Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│     Speaker     │────▶│  Socket.io Server │────▶│    Listener     │
-│ (Bilingual STT) │     │   (Port 3000)    │     │ (Translation +  │
-└─────────────────┘     └──────────────────┘     │      TTS)       │
-         │                                        └─────────────────┘
-         │                                                 │
-         ▼                                                 ▼
-┌─────────────────┐                              ┌─────────────────┐
-│  Express Server │                              │ Azure Translator│
-│  (Port 3003)    │                              │      API        │
-│ Token Exchange  │                              └─────────────────┘
-└─────────────────┘
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│     Speaker     │────▶│ WebSocket Server│────▶│    Listener     │
+│  (Browser/Mic)  │     │   (Port 3004)   │     │ (Browser/TTS)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                       │                         │
+         │                       │                         │
+         ▼                       ▼                         ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Speech SDK     │     │ Azure Translator│     │  Speech SDK     │
+│ (Recognition)   │     │      API        │     │    (TTS)        │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
-## Demo Files
+## Supported Languages
 
-### Core Demos
-- `speaker-bilingual-auto.html` - Bilingual speaker with auto language detection
-- `listener-zero-repetition.html` - Listener with zero-repetition TTS system
-- `listener-optimal-simultaneous.html` - Professional simultaneous translation
-- `test-zero-repetition.html` - Test page for deduplication system
+### Source Languages (Auto-detected)
+- French Canadian (fr-CA)
+- English US (en-US)
 
-### Progressive Enhancement Demos
-- `listener-multilingual-enhanced.html` - Enhanced multilingual support
-- `listener-stable-translation.html` - Stability-focused implementation
-- `listener-simultaneous-incremental.html` - Incremental speech approach
-
-## Token Exchange Security
-
-The application implements secure token exchange to protect Azure subscription keys:
-- Speech keys are stored server-side in environment variables
-- Express server exchanges keys for temporary tokens
-- Client-side code uses tokens instead of subscription keys
-- Tokens are ephemeral and time-limited
-
-## Development
-
-### Project Structure
-```
-├── server/
-│   ├── index.js              # Express server for token exchange
-│   ├── websocket-server.js   # Socket.io server for real-time comm
-│   └── translation-service.js # Azure Translator integration
-├── public/
-│   ├── speaker-*.html        # Speaker interfaces
-│   ├── listener-*.html       # Listener interfaces
-│   └── microsoft.*.js        # Speech SDK bundle
-├── .env                      # Environment variables (not in git)
-└── package.json              # Dependencies and scripts
-```
-
-### Key Technologies
-- Azure Cognitive Services Speech SDK
-- Azure Translator API
-- Socket.io for WebSocket communication
-- Express.js for token exchange
-- Vanilla JavaScript (no framework dependencies)
+### Target Languages
+- Spanish (es-ES)
+- English US (en-US)
+- French France (fr-FR)
+- German (de-DE)
+- Italian (it-IT)
+- Portuguese Brazil (pt-BR)
+- Japanese (ja-JP)
+- Chinese Mandarin (zh-CN)
 
 ## Troubleshooting
 
-1. **No audio from TTS**
-   - Check browser console for errors
-   - Ensure Azure Speech credentials are correct
-   - Verify target language is selected
+### WebSocket connection fails
+- Ensure both servers are running (check with `lsof -Pi :3001,3004`)
+- Check firewall settings
+- Verify WebSocket server is on port 3004
 
-2. **Translation not working**
-   - Confirm Azure Translator credentials in `.env`
-   - Check WebSocket connection in browser console
-   - Verify session code matches between speaker/listener
+### Speech recognition not working
+- Check microphone permissions in browser
+- Verify Azure Speech credentials in `.env`
+- Test connection using http://localhost:3001/test-speech-connection.html
 
-3. **Repetitive TTS playback**
-   - Use `listener-zero-repetition.html` for best results
-   - Enable debug mode to see deduplication in action
-   - Check the test page for deduplication effectiveness
+### No translation happening
+- Verify Azure Translator credentials in `.env`
+- Check WebSocket server logs: `tail -f websocket-server.log`
+- Ensure source and target languages are different
+
+### TTS not playing
+- Check browser audio permissions
+- Verify target language is supported
+- Check browser console for errors
+
+## Development
+
+### Running servers individually
+
+```bash
+# Express server only
+node server/index.js
+
+# WebSocket server only
+node server/websocket-server.js
+```
+
+### Viewing logs
+
+```bash
+# Express server logs
+tail -f express-server.log
+
+# WebSocket server logs
+tail -f websocket-server.log
+```
+
+### Adding new languages
+
+1. Add language option in `listener-professional.html`
+2. Add voice mapping in `getVoiceForLanguage()` function
+3. Update language detection array in `speaker-professional.html` if adding source languages
+
+## Security Notes
+
+- Never commit `.env` file with real credentials
+- API keys are exchanged for tokens server-side
+- Tokens are time-limited and region-specific
+- Consider adding authentication for production use
 
 ## License
 
-This project is licensed under the MIT License. See LICENSE file for details.
+This project uses Azure Cognitive Services which requires appropriate licensing.
 
-## Acknowledgments
+## Support
 
-Built with Microsoft Azure Cognitive Services:
-- [Speech SDK Documentation](https://docs.microsoft.com/azure/cognitive-services/speech-service/)
-- [Translator Documentation](https://docs.microsoft.com/azure/cognitive-services/translator/)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+For issues or questions:
+1. Check the troubleshooting section
+2. Review server logs for errors
+3. Test individual components using the test pages
+4. Ensure all Azure services are properly configured

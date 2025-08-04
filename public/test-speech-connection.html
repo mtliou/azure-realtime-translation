@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Speech Connection</title>
+    <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        #log {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Speech Connection Test</h1>
+        
+        <div id="status" class="status info">Click "Test Connection" to start</div>
+        
+        <div>
+            <button onclick="testConnection()">Test Connection</button>
+            <button onclick="testRecognition()">Test Recognition</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3001/api/get-speech-token';
+        let recognizer;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            logDiv.innerHTML += `<span style="color: ${color}">[${timestamp}] ${message}</span>\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${type}] ${message}`);
+        }
+        
+        function updateStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status ' + type;
+        }
+        
+        async function testConnection() {
+            log('Starting connection test...', 'info');
+            updateStatus('Testing connection...', 'info');
+            
+            try {
+                // Test 1: Check if Speech SDK is loaded
+                if (typeof SpeechSDK === 'undefined') {
+                    throw new Error('Speech SDK not loaded');
+                }
+                log('✓ Speech SDK loaded successfully', 'success');
+                
+                // Test 2: Get token from server
+                log('Fetching token from server...', 'info');
+                const response = await fetch(API_URL);
+                
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                log(`✓ Token received, Region: ${data.region}`, 'success');
+                
+                // Test 3: Create speech config
+                log('Creating speech config...', 'info');
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(data.token, data.region);
+                speechConfig.enableDictation();
+                log('✓ Speech config created', 'success');
+                
+                // Test 4: Create recognizer
+                log('Creating recognizer...', 'info');
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+                log('✓ Recognizer created', 'success');
+                
+                updateStatus('Connection test passed! All systems ready.', 'success');
+                
+            } catch (error) {
+                log(`✗ Error: ${error.message}`, 'error');
+                updateStatus(`Connection test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testRecognition() {
+            if (!recognizer) {
+                updateStatus('Please run connection test first', 'error');
+                return;
+            }
+            
+            updateStatus('Starting recognition test... Speak now!', 'info');
+            log('Starting continuous recognition...', 'info');
+            
+            recognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
+                    log(`Recognizing: ${e.result.text}`, 'info');
+                }
+            };
+            
+            recognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                    log(`✓ Recognized: ${e.result.text}`, 'success');
+                }
+            };
+            
+            recognizer.canceled = (s, e) => {
+                log(`✗ Recognition canceled: ${e.errorDetails}`, 'error');
+                updateStatus('Recognition failed', 'error');
+            };
+            
+            recognizer.sessionStarted = (s, e) => {
+                log('✓ Recognition session started', 'success');
+                updateStatus('Listening... Speak now!', 'success');
+            };
+            
+            recognizer.sessionStopped = (s, e) => {
+                log('Recognition session stopped', 'info');
+                updateStatus('Recognition test completed', 'info');
+            };
+            
+            try {
+                await recognizer.startContinuousRecognitionAsync();
+                
+                // Stop after 10 seconds
+                setTimeout(async () => {
+                    await recognizer.stopContinuousRecognitionAsync();
+                    log('Recognition test completed', 'info');
+                }, 10000);
+                
+            } catch (error) {
+                log(`✗ Recognition error: ${error}`, 'error');
+                updateStatus('Recognition test failed', 'error');
+            }
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        // Check on load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof SpeechSDK !== 'undefined') {
+                log('Page loaded - Speech SDK is available', 'success');
+            } else {
+                log('Page loaded - Speech SDK NOT available!', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

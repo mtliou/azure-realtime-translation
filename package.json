@@ -14,10 +14,14 @@
     "web-vitals": "^0.2.4"
   },
   "scripts": {
-    "server": "node-env-run server --exec nodemon | pino-colada",
+    "server": "node server/index.js",
+    "server:watch": "node-env-run server --exec nodemon | pino-colada",
     "websocket": "node server/websocket-server.js",
-    "dev": "run-p server start",
-    "dev-all": "run-p server websocket start"
+    "dev": "npm run server",
+    "dev-all": "run-p server websocket",
+    "test": "node test-translation-streaming.js",
+    "test:translation": "node test-translation-streaming.js",
+    "start": "./start.sh"
   },
   "browserslist": {
     "production": [
@@ -33,6 +37,7 @@
   },
   "devDependencies": {
     "body-parser": "^1.19.0",
+    "colors": "^1.4.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^4.17.1",

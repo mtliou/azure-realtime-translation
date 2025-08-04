@@ -27,7 +27,7 @@ io.on('connection', (socket) => {
     
     // Speaker joins a session
     socket.on('speaker-join', (data) => {
-        const { sessionCode, sourceLanguage } = data;
+        const { sessionCode, sourceLanguage, language, supportedLanguages } = data;
         
         // Create or update session
         let session = sessions.get(sessionCode);
@@ -35,23 +35,29 @@ io.on('connection', (socket) => {
             session = {
                 speaker: null,
                 listeners: new Map(),
-                sourceLanguage: sourceLanguage,
+                sourceLanguage: sourceLanguage || language || 'auto',
+                supportedLanguages: supportedLanguages || [],
                 created: Date.now()
             };
             sessions.set(sessionCode, session);
         }
         
         session.speaker = socket.id;
-        session.sourceLanguage = sourceLanguage;
+        session.sourceLanguage = sourceLanguage || language || 'auto';
+        session.supportedLanguages = supportedLanguages || [];
         socket.join(`session-${sessionCode}`);
         
-        console.log(`Speaker joined session ${sessionCode} with language ${sourceLanguage}`);
+        console.log(`Speaker joined session ${sessionCode} with language ${session.sourceLanguage}`);
         
         // Notify all listeners in the session
         socket.to(`session-${sessionCode}`).emit('speaker-info', {
-            sourceLanguage: sourceLanguage,
+            sourceLanguage: session.sourceLanguage,
+            supportedLanguages: session.supportedLanguages,
             speakerId: socket.id
         });
+        
+        // Update listener count
+        socket.emit('listener-count', session.listeners.size);
     });
     
     // Listener joins a session
@@ -89,6 +95,79 @@ io.on('connection', (socket) => {
                 targetLanguage: targetLanguage
             });
         }
+    });
+    
+    // Handle speech data (unified handler for test page)
+    socket.on('speech-data', async (data) => {
+        const { sessionCode, text, isFinal, language, timestamp } = data;
+        const session = sessions.get(sessionCode);
+        
+        if (!session || session.speaker !== socket.id) return;
+        
+        console.log(`Speech data received: "${text}" [${language}] (final: ${isFinal})`);
+        
+        // Store last known language for this session
+        if (language && language !== 'unknown' && language !== 'bilingual') {
+            session.lastKnownLanguage = language;
+        }
+        
+        // Determine source language - use last known if current is unknown
+        let sourceLang = language;
+        if (!sourceLang || sourceLang === 'unknown' || sourceLang === 'bilingual') {
+            sourceLang = session.lastKnownLanguage || session.sourceLanguage || 'fr-CA';
+        }
+        
+        // Translate for each listener
+        const translationPromises = Array.from(session.listeners.entries()).map(async ([listenerId, listener]) => {
+            try {
+                // Skip translation if same language
+                if (sourceLang === listener.targetLanguage) {
+                    io.to(listenerId).emit('translation', {
+                        originalText: text,
+                        translatedText: text,
+                        timestamp: timestamp,
+                        isFinal: isFinal,
+                        sourceLanguage: sourceLang,
+                        targetLanguage: listener.targetLanguage
+                    });
+                    return;
+                }
+                
+                console.log(`Translating from ${sourceLang} to ${listener.targetLanguage}`);
+                
+                // Use ultra-low latency translation for partial results
+                const translation = isFinal 
+                    ? await translationService.translateText(text, sourceLang, listener.targetLanguage)
+                    : await translationService.translateTextUltraLowLatency(text, sourceLang, listener.targetLanguage);
+                
+                console.log(`Translation result: "${translation}"`);
+                
+                // Send translation to listener
+                io.to(listenerId).emit('translation', {
+                    originalText: text,
+                    translatedText: translation,
+                    timestamp: timestamp,
+                    isFinal: isFinal,
+                    sourceLanguage: sourceLang,
+                    targetLanguage: listener.targetLanguage
+                });
+                
+            } catch (error) {
+                console.error('Translation error:', error);
+                // Send original text on error
+                io.to(listenerId).emit('translation', {
+                    originalText: text,
+                    translatedText: text,
+                    timestamp: timestamp,
+                    isFinal: isFinal,
+                    sourceLanguage: sourceLang,
+                    targetLanguage: listener.targetLanguage,
+                    error: true
+                });
+            }
+        });
+        
+        await Promise.all(translationPromises);
     });
     
     // Handle partial speech results

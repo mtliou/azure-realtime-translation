@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Live Speech Broadcaster - Professional</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #2d3748;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            color: #718096;
+            font-size: 1.1em;
+        }
+        
+        .session-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        
+        .session-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .session-code {
+            font-size: 3em;
+            font-weight: bold;
+            letter-spacing: 5px;
+            font-family: 'Courier New', monospace;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .language-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .language-label {
+            color: #4a5568;
+            font-weight: 500;
+        }
+        
+        .language-badge {
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 0.95em;
+            transition: all 0.3s ease;
+        }
+        
+        .language-badge.fr-CA {
+            background: #f56565;
+            color: white;
+        }
+        
+        .language-badge.en-US {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .language-badge.unknown {
+            background: #cbd5e0;
+            color: #2d3748;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background: #e53e3e;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(245, 101, 101, 0.3);
+        }
+        
+        .btn:disabled {
+            background: #e2e8f0;
+            color: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status-bar {
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+            margin-bottom: 25px;
+            transition: all 0.3s ease;
+        }
+        
+        .status-bar.info {
+            background: #bee3f8;
+            color: #2b6cb0;
+        }
+        
+        .status-bar.success {
+            background: #c6f6d5;
+            color: #276749;
+        }
+        
+        .status-bar.error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+        
+        .status-bar.broadcasting {
+            background: #fbb6ce;
+            color: #97266d;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .metric-card {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            color: #718096;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .transcript-container {
+            background: #2d3748;
+            border-radius: 12px;
+            padding: 20px;
+            height: 300px;
+            overflow-y: auto;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .transcript-item {
+            margin: 8px 0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9em;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .transcript-item.partial {
+            background: rgba(251, 191, 36, 0.1);
+            color: #fbbf24;
+            border-left: 3px solid #fbbf24;
+        }
+        
+        .transcript-item.final {
+            background: rgba(72, 187, 120, 0.1);
+            color: #48bb78;
+            border-left: 3px solid #48bb78;
+        }
+        
+        .transcript-item .timestamp {
+            opacity: 0.6;
+            font-size: 0.85em;
+            margin-right: 10px;
+        }
+        
+        .transcript-item .language {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-right: 8px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .settings {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .setting-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .setting-label {
+            color: #4a5568;
+            font-weight: 500;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e0;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #667eea;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        
+        .icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+        }
+        
+        /* Scrollbar styling */
+        .transcript-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .transcript-container::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+        
+        .transcript-container::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+        
+        .transcript-container::-webkit-scrollbar-thumb:hover {
+            background: #5a67d8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎙️ Live Speech Broadcaster</h1>
+            <p>Real-time speech recognition and translation</p>
+        </div>
+        
+        <div class="session-card">
+            <div class="session-label">Session Code</div>
+            <div class="session-code" id="sessionCode">----</div>
+        </div>
+        
+        <div class="language-indicator">
+            <span class="language-label">Detected Language:</span>
+            <span class="language-badge unknown" id="languageBadge">Not Detected</span>
+        </div>
+        
+        <div class="status-bar info" id="statusBar">
+            Click "Start Session" to begin broadcasting
+        </div>
+        
+        <div class="settings">
+            <div class="setting-row">
+                <span class="setting-label">Send Partial Results</span>
+                <label class="switch">
+                    <input type="checkbox" id="sendPartials" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="setting-row">
+                <span class="setting-label">Force Language Detection</span>
+                <label class="switch">
+                    <input type="checkbox" id="forceLanguage" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-primary" id="startBtn" onclick="startSession()">
+                <span>🚀</span> Start Session
+            </button>
+            <button class="btn btn-danger" id="broadcastBtn" onclick="toggleBroadcast()" disabled>
+                <span>🎙️</span> Start Broadcasting
+            </button>
+        </div>
+        
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-value" id="partialCount">0</div>
+                <div class="metric-label">Partials</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="finalCount">0</div>
+                <div class="metric-label">Finals</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="listenerCount">0</div>
+                <div class="metric-label">Listeners</div>
+            </div>
+        </div>
+        
+        <div class="transcript-container" id="transcript"></div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_URL = 'http://localhost:3001/api/get-speech-token';
+        const WS_URL = 'http://localhost:3004';
+        
+        // State
+        let recognizer;
+        let socket;
+        let sessionCode;
+        let isRecognizing = false;
+        let detectedLanguage = 'fr-CA';
+        let lastKnownLanguage = 'fr-CA';
+        let partialCounter = 0;
+        let finalCounter = 0;
+        
+        // Generate session code
+        function generateSessionCode() {
+            sessionCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            document.getElementById('sessionCode').textContent = sessionCode;
+        }
+        
+        // Update status
+        function updateStatus(message, type = 'info') {
+            const statusBar = document.getElementById('statusBar');
+            statusBar.textContent = message;
+            statusBar.className = 'status-bar ' + type;
+        }
+        
+        // Update language badge
+        function updateLanguageBadge(lang) {
+            const badge = document.getElementById('languageBadge');
+            const langNames = {
+                'fr-CA': 'French Canadian',
+                'en-US': 'English US',
+                'unknown': 'Not Detected'
+            };
+            
+            badge.textContent = langNames[lang] || lang;
+            badge.className = 'language-badge ' + (lang || 'unknown');
+            
+            if (lang && lang !== 'unknown') {
+                detectedLanguage = lang;
+                lastKnownLanguage = lang;
+            }
+        }
+        
+        // Add to transcript
+        function addTranscript(text, type = 'info', language = '') {
+            const container = document.getElementById('transcript');
+            const item = document.createElement('div');
+            item.className = 'transcript-item ' + type;
+            
+            const time = new Date().toLocaleTimeString();
+            const timestamp = `<span class="timestamp">${time}</span>`;
+            const langBadge = language ? `<span class="language">${language}</span>` : '';
+            
+            item.innerHTML = `${timestamp}${langBadge}${text}`;
+            container.appendChild(item);
+            container.scrollTop = container.scrollHeight;
+            
+            // Keep only last 50 items
+            while (container.children.length > 50) {
+                container.removeChild(container.firstChild);
+            }
+        }
+        
+        // Initialize speech recognition
+        async function initializeSpeech() {
+            try {
+                // Get speech token from server
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                
+                if (!data.token || !data.region) {
+                    throw new Error('Failed to get speech token');
+                }
+                
+                // Create speech config with token
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(data.token, data.region);
+                speechConfig.enableDictation();
+                
+                // Auto-detect French Canadian and English
+                const autoDetectConfig = SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages([
+                    "fr-CA",
+                    "en-US"
+                ]);
+                
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                
+                // Create recognizer
+                recognizer = SpeechSDK.SpeechRecognizer.FromConfig(
+                    speechConfig,
+                    autoDetectConfig,
+                    audioConfig
+                );
+                
+                setupRecognizerEvents();
+                
+                updateStatus('Speech services initialized', 'success');
+                return true;
+                
+            } catch (error) {
+                updateStatus(`Failed to initialize speech: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        // Setup recognizer events
+        function setupRecognizerEvents() {
+            recognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
+                    const text = e.result.text;
+                    if (!text) return;
+                    
+                    const lang = e.result.properties.getProperty(
+                        SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult
+                    ) || lastKnownLanguage;
+                    
+                    updateLanguageBadge(lang);
+                    
+                    // Send partial results
+                    if (socket && socket.connected && document.getElementById('sendPartials').checked) {
+                        const sendLang = document.getElementById('forceLanguage').checked ? 
+                            (lang || lastKnownLanguage) : lang;
+                        
+                        socket.emit('speech-data', {
+                            sessionCode,
+                            text: text,
+                            isFinal: false,
+                            language: sendLang,
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                        partialCounter++;
+                        document.getElementById('partialCount').textContent = partialCounter;
+                    }
+                    
+                    addTranscript(text, 'partial', lang);
+                }
+            };
+            
+            recognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech && e.result.text) {
+                    const text = e.result.text;
+                    const lang = e.result.properties.getProperty(
+                        SpeechSDK.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult
+                    ) || lastKnownLanguage;
+                    
+                    updateLanguageBadge(lang);
+                    
+                    // Send final results
+                    if (socket && socket.connected) {
+                        const sendLang = document.getElementById('forceLanguage').checked ? 
+                            (lang || lastKnownLanguage) : lang;
+                        
+                        socket.emit('speech-data', {
+                            sessionCode,
+                            text: text,
+                            isFinal: true,
+                            language: sendLang,
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                        finalCounter++;
+                        document.getElementById('finalCount').textContent = finalCounter;
+                    }
+                    
+                    addTranscript(text, 'final', lang);
+                }
+            };
+            
+            recognizer.sessionStarted = (s, e) => {
+                updateStatus('🔴 Broadcasting - Speak now!', 'broadcasting');
+            };
+            
+            recognizer.sessionStopped = (s, e) => {
+                updateStatus('Session connected - Ready to broadcast', 'success');
+            };
+        }
+        
+        // Start session
+        async function startSession() {
+            generateSessionCode();
+            
+            document.getElementById('startBtn').disabled = true;
+            updateStatus('Initializing...', 'info');
+            
+            // Initialize speech
+            const speechReady = await initializeSpeech();
+            if (!speechReady) {
+                document.getElementById('startBtn').disabled = false;
+                return;
+            }
+            
+            // Connect to WebSocket
+            socket = io(WS_URL, {
+                transports: ['websocket', 'polling'],
+                reconnection: true
+            });
+            
+            socket.on('connect', () => {
+                // Join as speaker
+                socket.emit('speaker-join', {
+                    sessionCode,
+                    sourceLanguage: 'fr-CA',
+                    language: 'fr-CA',
+                    supportedLanguages: ['fr-CA', 'en-US']
+                });
+                
+                updateStatus('Session connected - Ready to broadcast', 'success');
+                document.getElementById('broadcastBtn').disabled = false;
+                
+                addTranscript('Session started successfully', 'info');
+            });
+            
+            socket.on('listener-count', (count) => {
+                document.getElementById('listenerCount').textContent = count;
+            });
+            
+            socket.on('listener-joined', (data) => {
+                addTranscript(`Listener joined for ${data.targetLanguage} translation`, 'info');
+            });
+            
+            socket.on('disconnect', () => {
+                updateStatus('Disconnected from server', 'error');
+            });
+        }
+        
+        // Toggle broadcast
+        async function toggleBroadcast() {
+            const btn = document.getElementById('broadcastBtn');
+            
+            if (!isRecognizing) {
+                try {
+                    await recognizer.startContinuousRecognitionAsync();
+                    isRecognizing = true;
+                    btn.innerHTML = '<span>⏹️</span> Stop Broadcasting';
+                    
+                    // Reset counters
+                    partialCounter = 0;
+                    finalCounter = 0;
+                    document.getElementById('partialCount').textContent = '0';
+                    document.getElementById('finalCount').textContent = '0';
+                    
+                } catch (error) {
+                    updateStatus(`Failed to start: ${error}`, 'error');
+                }
+            } else {
+                try {
+                    await recognizer.stopContinuousRecognitionAsync();
+                    isRecognizing = false;
+                    btn.innerHTML = '<span>🎙️</span> Start Broadcasting';
+                    updateStatus('Broadcasting stopped', 'info');
+                } catch (error) {
+                    updateStatus(`Failed to stop: ${error}`, 'error');
+                }
+            }
+        }
+        
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            updateStatus('Click "Start Session" to begin', 'info');
+        });
+    </script>
+</body>
+</html>

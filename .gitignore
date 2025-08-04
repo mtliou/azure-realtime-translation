@@ -38,3 +38,52 @@ config.js
 # Temporary files
 *.tmp
 *.temp
+
+# Exclude test and demo files not needed for main app
+# BUT keep our main professional files and test-speech-connection.html
+test-*.html
+!public/test-speech-connection.html
+test-*.js
+public/bilingual-*.html
+public/listener-bilingual-*.html
+public/listener-elevenlabs*.html
+public/listener-multilingual*.html
+public/listener-no-duplicates.html
+public/listener-optimal-simultaneous.html
+public/listener-realtime.html
+public/listener-stable-translation.html
+public/listener-tts-comparison.html
+public/listener-zero-repetition.html
+public/listener-streaming-tts.html
+public/listener-working.html
+public/listener.html
+!public/listener-professional.html
+public/multilingual-*.html
+public/realtime-translation.html
+public/simultaneous-translation.html
+public/speaker-bilingual-*.html
+public/speaker-multilingual.html
+public/speaker-premium.html
+public/speaker-streaming.html
+public/speaker-working.html
+public/speaker.html
+!public/speaker-professional.html
+public/translation-demos.html
+public/tts-comparison-premium.html
+public/synthesis.html
+public/index.html
+
+# Exclude duplicate files in root
+listener-professional.html
+speaker-professional.html
+
+# Misc files
+status.html
+synthesis.html
+index.html
+monitor-logs.sh
+restart-websocket.sh
+start-server.sh
+start.sh
+generate-config.js
+generate-config.jsp

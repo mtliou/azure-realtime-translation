@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Speech-to-Speech Translation System</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 800px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            color: #2d3748;
+            font-size: 3em;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            color: #718096;
+            font-size: 1.2em;
+            line-height: 1.6;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .feature {
+            text-align: center;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .feature-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .feature-title {
+            color: #2d3748;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .feature-desc {
+            color: #718096;
+            font-size: 0.9em;
+        }
+        
+        .cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .card-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 2.5em;
+        }
+        
+        .speaker-icon {
+            background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+            color: white;
+        }
+        
+        .listener-icon {
+            background: linear-gradient(135deg, #f56565 0%, #ed8936 100%);
+            color: white;
+        }
+        
+        .card h2 {
+            color: #2d3748;
+            font-size: 1.8em;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .card p {
+            color: #718096;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        
+        .card-btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover .card-btn {
+            background: #5a67d8;
+        }
+        
+        .info-section {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .info-section h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+        
+        .info-section ul {
+            list-style: none;
+        }
+        
+        .info-section li {
+            color: #4a5568;
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .info-section li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #48bb78;
+            font-weight: bold;
+        }
+        
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .tech-badge {
+            padding: 5px 15px;
+            background: #e6fffa;
+            color: #047857;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        
+        .footer {
+            text-align: center;
+            color: #718096;
+            font-size: 0.9em;
+        }
+        
+        @media (max-width: 768px) {
+            .cards {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 Speech-to-Speech Translation</h1>
+            <p>Real-time speech recognition, translation, and text-to-speech with minimal latency</p>
+        </div>
+        
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">🎯</div>
+                <div class="feature-title">Minimal Latency</div>
+                <div class="feature-desc">&lt;500ms end-to-end</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🌍</div>
+                <div class="feature-title">Multi-Language</div>
+                <div class="feature-desc">8+ languages supported</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🔊</div>
+                <div class="feature-title">Streaming TTS</div>
+                <div class="feature-desc">Starts before speech ends</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🎨</div>
+                <div class="feature-title">Professional UI</div>
+                <div class="feature-desc">Modern, responsive design</div>
+            </div>
+        </div>
+        
+        <div class="cards">
+            <a href="speaker-professional.html" class="card">
+                <div class="card-icon speaker-icon">🎙️</div>
+                <h2>Speaker</h2>
+                <p>Broadcast your speech with automatic language detection. Supports French Canadian and English with real-time recognition.</p>
+                <span class="card-btn">Start Broadcasting</span>
+            </a>
+            
+            <a href="listener-professional.html" class="card">
+                <div class="card-icon listener-icon">🎧</div>
+                <h2>Listener</h2>
+                <p>Join a session to receive real-time translations with text-to-speech output. Experience minimal latency streaming.</p>
+                <span class="card-btn">Join Session</span>
+            </a>
+        </div>
+        
+        <div class="info-section">
+            <h3>How It Works</h3>
+            <ul>
+                <li>Speaker creates a session and receives a unique 6-character code</li>
+                <li>Listener joins using the session code and selects target language</li>
+                <li>Speech is recognized, translated, and spoken in real-time</li>
+                <li>TTS starts playing before the speaker finishes for minimal latency</li>
+            </ul>
+        </div>
+        
+        <div class="info-section">
+            <h3>Key Features</h3>
+            <ul>
+                <li>Automatic language detection (French Canadian & English)</li>
+                <li>Streaming partial results for low latency</li>
+                <li>Smart text segmentation for natural TTS output</li>
+                <li>Configurable stability threshold and speaking rate</li>
+                <li>Professional UI with real-time metrics</li>
+            </ul>
+            
+            <div class="tech-stack">
+                <span class="tech-badge">Azure Speech Services</span>
+                <span class="tech-badge">WebSockets</span>
+                <span class="tech-badge">Neural TTS</span>
+                <span class="tech-badge">Real-time Translation</span>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Powered by Azure Cognitive Services • WebSocket Server on Port 3004</p>
+        </div>
+    </div>
+</body>
+</html>
