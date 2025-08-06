@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Speech Translation Dashboard</title>
+    <meta charset="utf-8" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0f0f0f 100%);
+            min-height: 100vh;
+            color: white;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px;
+            background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(16, 185, 129, 0.1));
+            border-radius: 30px;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(96, 165, 250, 0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        h1 {
+            font-size: 3em;
+            background: linear-gradient(90deg, #60a5fa, #3b82f6, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .subtitle {
+            color: #888;
+            font-size: 1.2em;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .features {
+            display: flex;
+            gap: 20px;
+            margin-top: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .feature-badge {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            font-size: 0.9em;
+            backdrop-filter: blur(5px);
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        
+        .card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #60a5fa, #3b82f6, #10b981);
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            border-color: rgba(96, 165, 250, 0.3);
+        }
+        
+        .card:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .card-icon {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        
+        .card h2 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: #60a5fa;
+        }
+        
+        .card p {
+            color: #888;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+        
+        .card-features {
+            list-style: none;
+            margin-bottom: 25px;
+        }
+        
+        .card-features li {
+            padding: 8px 0;
+            color: #aaa;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .card-features li::before {
+            content: '✓';
+            color: #10b981;
+            font-weight: bold;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9em;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(96, 165, 250, 0.4);
+        }
+        
+        .btn.secondary {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        .btn.tertiary {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+        
+        .stats-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 50px;
+            text-align: center;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .stat-box {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            background: linear-gradient(90deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .stat-label {
+            color: #888;
+            margin-top: 10px;
+            text-transform: uppercase;
+            font-size: 0.9em;
+            letter-spacing: 1px;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: 50px;
+        }
+        
+        .tech-stack {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .tech-item {
+            padding: 5px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 Real-Time Speech Translation System</h1>
+            <p class="subtitle">Ultra-Low Latency • Multi-Language Support • Azure Powered</p>
+            
+            <div class="features">
+                <div class="feature-badge">⚡ <50ms Latency</div>
+                <div class="feature-badge">🌍 8+ Languages</div>
+                <div class="feature-badge">🎯 90%+ Accuracy</div>
+                <div class="feature-badge">🔊 Neural TTS</div>
+                <div class="feature-badge">🇨🇦 FR/EN Optimized</div>
+            </div>
+        </div>
+        
+        <div class="cards-grid">
+            <!-- Speaker Card -->
+            <div class="card">
+                <div class="card-icon">🎙️</div>
+                <h2>Ultra-Low Latency Speaker</h2>
+                <p>Broadcast your speech with real-time transcription and sentence-level streaming for minimal latency.</p>
+                
+                <ul class="card-features">
+                    <li>Automatic language detection (FR/EN)</li>
+                    <li>Sentence boundary detection</li>
+                    <li>Smart chunking for long phrases</li>
+                    <li>Real-time partial transcripts</li>
+                    <li>Session code generation</li>
+                </ul>
+                
+                <a href="/speaker-streaming.html" class="btn">Start Broadcasting</a>
+            </div>
+            
+            <!-- Listener Card -->
+            <div class="card">
+                <div class="card-icon">🎧</div>
+                <h2>Streaming Listener</h2>
+                <p>Receive live translations with immediate TTS playback and beautiful voice visualization.</p>
+                
+                <ul class="card-features">
+                    <li>Instant TTS queue system</li>
+                    <li>Real-time partial display</li>
+                    <li>Advanced voice visualizer</li>
+                    <li>Multiple target languages</li>
+                    <li>Latency monitoring</li>
+                </ul>
+                
+                <a href="/listener-streaming.html" class="btn secondary">Join Session</a>
+            </div>
+            
+            <!-- Monitor Card -->
+            <div class="card">
+                <div class="card-icon">📊</div>
+                <h2>System Monitor</h2>
+                <p>Real-time monitoring dashboard with comprehensive logging and performance metrics.</p>
+                
+                <ul class="card-features">
+                    <li>Live event stream</li>
+                    <li>TTS playback tracking</li>
+                    <li>Session management</li>
+                    <li>Performance metrics</li>
+                    <li>Error tracking</li>
+                </ul>
+                
+                <a href="/monitor-dashboard.html" class="btn tertiary">Open Monitor</a>
+            </div>
+        </div>
+        
+        <div class="cards-grid">
+            <!-- Voice Visualizer Card -->
+            <div class="card">
+                <div class="card-icon">🎵</div>
+                <h2>Voice Visualizer</h2>
+                <p>Advanced audio visualization with multiple modes and stunning effects.</p>
+                
+                <ul class="card-features">
+                    <li>Spectrum analyzer</li>
+                    <li>Waveform display</li>
+                    <li>Circular visualizer</li>
+                    <li>Particle effects</li>
+                    <li>Real-time animation</li>
+                </ul>
+                
+                <a href="/voice-visualizer.html" class="btn">Open Visualizer</a>
+            </div>
+            
+            <!-- Legacy Speaker Card -->
+            <div class="card">
+                <div class="card-icon">📡</div>
+                <h2>Legacy Speaker</h2>
+                <p>Original speaker implementation with auto-detect for multiple languages.</p>
+                
+                <ul class="card-features">
+                    <li>Multi-language auto-detect</li>
+                    <li>Standard transcription</li>
+                    <li>Session management</li>
+                    <li>WebSocket streaming</li>
+                    <li>Basic UI</li>
+                </ul>
+                
+                <a href="/speaker-auto-detect.html" class="btn secondary">Legacy Mode</a>
+            </div>
+            
+            <!-- Legacy Listener Card -->
+            <div class="card">
+                <div class="card-icon">📻</div>
+                <h2>Legacy Listener</h2>
+                <p>Original listener with standard TTS playback and translation display.</p>
+                
+                <ul class="card-features">
+                    <li>Standard TTS playback</li>
+                    <li>Translation display</li>
+                    <li>Multiple languages</li>
+                    <li>Session joining</li>
+                    <li>Basic metrics</li>
+                </ul>
+                
+                <a href="/listener-auto-receive.html" class="btn tertiary">Legacy Mode</a>
+            </div>
+        </div>
+        
+        <div class="stats-section">
+            <h2>System Performance</h2>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-value"><50ms</div>
+                    <div class="stat-label">Streaming Latency</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">90-93%</div>
+                    <div class="stat-label">Translation Accuracy</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">8+</div>
+                    <div class="stat-label">Supported Languages</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">∞</div>
+                    <div class="stat-label">Concurrent Sessions</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Powered by Azure Cognitive Services</p>
+            <div class="tech-stack">
+                <div class="tech-item">Azure Speech SDK</div>
+                <div class="tech-item">Azure Translator</div>
+                <div class="tech-item">WebSocket</div>
+                <div class="tech-item">Neural TTS</div>
+                <div class="tech-item">Node.js</div>
+                <div class="tech-item">Socket.IO</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

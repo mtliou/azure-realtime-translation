@@ -148,9 +148,9 @@ io.on('connection', (socket) => {
         }
     });
     
-    // Handle speech data from speaker
+    // Handle speech data from speaker (with streaming support)
     socket.on('speech-data', async (data) => {
-        const { sessionCode, text, isFinal, language, timestamp } = data;
+        const { sessionCode, text, isFinal, language, timestamp, isStreaming, isSentence, isPartial } = data;
         const session = sessions.get(sessionCode);
         
         if (!session) {
@@ -164,13 +164,26 @@ io.on('connection', (socket) => {
         }
         
         session.messageCount++;
-        log('DEBUG', `Speech data received (#${session.messageCount})`, {
+        
+        // Log streaming info
+        const logData = {
             sessionCode,
             text: text.substring(0, 50) + '...',
             language,
             isFinal,
+            isPartial,
+            isStreaming,
+            isSentence,
             listenersCount: session.listeners.size
-        });
+        };
+        
+        if (isPartial) {
+            log('DEBUG', `Partial transcript received (#${session.messageCount})`, logData);
+        } else if (isStreaming || isSentence) {
+            log('INFO', `Streaming sentence received (#${session.messageCount})`, logData);
+        } else {
+            log('DEBUG', `Speech data received (#${session.messageCount})`, logData);
+        }
         
         // Store last known language for this session
         if (language && language !== 'unknown' && language !== 'bilingual') {
@@ -212,11 +225,11 @@ io.on('connection', (socket) => {
                     textLength: text.length
                 });
                 
-                // Use ultra-low latency translation for partial results
+                // Use ultra-low latency for streaming sentences
                 const startTime = Date.now();
-                const translation = isFinal 
-                    ? await translationService.translateText(text, sourceLang, listener.targetLanguage)
-                    : await translationService.translateTextUltraLowLatency(text, sourceLang, listener.targetLanguage);
+                const translation = (isStreaming || isSentence || !isFinal)
+                    ? await translationService.translateTextUltraLowLatency(text, sourceLang, listener.targetLanguage)
+                    : await translationService.translateText(text, sourceLang, listener.targetLanguage);
                 
                 const translationTime = Date.now() - startTime;
                 
@@ -226,12 +239,15 @@ io.on('connection', (socket) => {
                     time: translationTime
                 });
                 
-                // Send translation to listener
+                // Send translation to listener with streaming flags
                 io.to(listenerId).emit('translation', {
                     originalText: text,
                     translatedText: translation,
                     timestamp: timestamp,
                     isFinal: isFinal,
+                    isPartial: isPartial,
+                    isStreaming: isStreaming,
+                    isSentence: isSentence,
                     sourceLanguage: sourceLang,
                     targetLanguage: listener.targetLanguage
                 });
@@ -292,6 +308,20 @@ io.on('connection', (socket) => {
                 socketId: socket.id
             });
         }
+    });
+    
+    // Handle TTS completion events from listeners
+    socket.on('tts-completed', (data) => {
+        log('SUCCESS', 'TTS playback completed', {
+            sessionCode: data.sessionCode,
+            text: data.text,
+            language: data.language,
+            voice: data.voice,
+            socketId: socket.id
+        });
+        
+        // Broadcast to monitoring clients
+        io.emit('tts-completed', data);
     });
     
     // Handle disconnect

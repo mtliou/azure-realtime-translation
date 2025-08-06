@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>System Monitor Dashboard</title>
+    <meta charset="utf-8" />
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #00ff00;
+            background: rgba(0, 255, 0, 0.05);
+        }
+        
+        h1 {
+            font-size: 2em;
+            text-shadow: 0 0 10px #00ff00;
+            margin-bottom: 10px;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .panel {
+            border: 1px solid #00ff00;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.8);
+        }
+        
+        .panel h2 {
+            color: #00ff00;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            font-size: 1.2em;
+            border-bottom: 1px solid #00ff00;
+            padding-bottom: 5px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        
+        .stat-item {
+            padding: 10px;
+            background: rgba(0, 255, 0, 0.05);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #00ff00;
+        }
+        
+        .session-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .session-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(0, 255, 0, 0.05);
+            border-left: 3px solid #00ff00;
+        }
+        
+        .session-code {
+            font-weight: bold;
+            color: #ffff00;
+            font-size: 1.2em;
+        }
+        
+        .session-details {
+            margin-top: 5px;
+            font-size: 0.9em;
+            color: #888;
+        }
+        
+        .log-container {
+            border: 1px solid #00ff00;
+            background: #000;
+            padding: 15px;
+            height: 500px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .log-container h2 {
+            color: #00ff00;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+            padding: 5px;
+            border-left: 2px solid transparent;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .log-entry.info {
+            color: #00ff00;
+            border-left-color: #00ff00;
+        }
+        
+        .log-entry.warn {
+            color: #ffff00;
+            border-left-color: #ffff00;
+        }
+        
+        .log-entry.error {
+            color: #ff0000;
+            border-left-color: #ff0000;
+        }
+        
+        .log-entry.success {
+            color: #00ffff;
+            border-left-color: #00ffff;
+        }
+        
+        .log-entry.tts {
+            color: #ff00ff;
+            border-left-color: #ff00ff;
+        }
+        
+        .log-entry.translation {
+            color: #ffaa00;
+            border-left-color: #ffaa00;
+        }
+        
+        .timestamp {
+            color: #555;
+            font-size: 0.8em;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #000;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-family: 'Courier New', monospace;
+        }
+        
+        button:hover {
+            background: rgba(0, 255, 0, 0.1);
+        }
+        
+        .live-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #00ff00;
+            border-radius: 50%;
+            margin-left: 10px;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .metrics-panel {
+            margin-top: 20px;
+            border: 1px solid #00ff00;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.8);
+        }
+        
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+        }
+        
+        .metric-label {
+            color: #888;
+        }
+        
+        .metric-value {
+            color: #00ff00;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button onclick="clearLogs()">Clear Logs</button>
+        <button onclick="exportLogs()">Export Logs</button>
+        <button onclick="toggleAutoScroll()">Auto-Scroll: ON</button>
+    </div>
+
+    <div class="header">
+        <h1>🖥️ SYSTEM MONITOR DASHBOARD <span class="live-indicator"></span></h1>
+        <p>Real-time Speech Translation System Monitoring</p>
+    </div>
+    
+    <div class="dashboard">
+        <div class="panel">
+            <h2>System Status</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Active Sessions</div>
+                    <div class="stat-value" id="activeSessions">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Speakers</div>
+                    <div class="stat-value" id="totalSpeakers">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Listeners</div>
+                    <div class="stat-value" id="totalListeners">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Messages/min</div>
+                    <div class="stat-value" id="messageRate">0</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>Active Sessions</h2>
+            <div class="session-list" id="sessionList">
+                <!-- Sessions will be populated here -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="metrics-panel">
+        <h2>Performance Metrics</h2>
+        <div class="metric-row">
+            <span class="metric-label">Translation Latency (avg)</span>
+            <span class="metric-value" id="avgLatency">0ms</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">TTS Events</span>
+            <span class="metric-value" id="ttsEvents">0</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Translation Success Rate</span>
+            <span class="metric-value" id="successRate">100%</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Cache Hit Rate</span>
+            <span class="metric-value" id="cacheHitRate">0%</span>
+        </div>
+        <div class="metric-row">
+            <span class="metric-label">Server Uptime</span>
+            <span class="metric-value" id="uptime">0:00:00</span>
+        </div>
+    </div>
+    
+    <div class="log-container">
+        <h2>Live Event Stream</h2>
+        <div id="logStream"></div>
+    </div>
+
+    <script>
+        let socket;
+        let autoScroll = true;
+        let logs = [];
+        let sessions = new Map();
+        let metrics = {
+            ttsEvents: 0,
+            translations: 0,
+            errors: 0,
+            latencies: [],
+            cacheHits: 0,
+            cacheMisses: 0
+        };
+        
+        // Initialize WebSocket connection
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                addLog('success', 'Connected to monitoring server');
+            });
+            
+            socket.on('disconnect', () => {
+                addLog('error', 'Disconnected from monitoring server');
+            });
+            
+            // Monitor all events
+            socket.onAny((eventName, ...args) => {
+                handleEvent(eventName, args[0]);
+            });
+            
+            // Request initial stats
+            setInterval(fetchStats, 2000);
+            fetchStats();
+        }
+        
+        function handleEvent(eventName, data) {
+            const timestamp = new Date().toISOString();
+            
+            switch(eventName) {
+                case 'speaker-join':
+                    addLog('info', `[SPEAKER] Joined session ${data.sessionCode} | Language: ${data.sourceLanguage || 'auto'}`, timestamp);
+                    updateSession(data.sessionCode, { speaker: true, sourceLanguage: data.sourceLanguage });
+                    break;
+                    
+                case 'listener-join':
+                    addLog('info', `[LISTENER] Joined session ${data.sessionCode} | Target: ${data.targetLanguage}`, timestamp);
+                    updateSession(data.sessionCode, { listeners: (sessions.get(data.sessionCode)?.listeners || 0) + 1 });
+                    break;
+                    
+                case 'speech-data':
+                    if (data.isFinal) {
+                        addLog('translation', `[SPEECH] Session ${data.sessionCode}: "${data.text?.substring(0, 100)}..." | ${data.language}`, timestamp);
+                    }
+                    break;
+                    
+                case 'translation':
+                    metrics.translations++;
+                    addLog('translation', `[TRANSLATE] ${data.sourceLanguage} → ${data.targetLanguage}: "${data.translatedText?.substring(0, 100)}..."`, timestamp);
+                    break;
+                    
+                case 'tts-completed':
+                    metrics.ttsEvents++;
+                    document.getElementById('ttsEvents').textContent = metrics.ttsEvents;
+                    addLog('tts', `[TTS] 🔊 Played: "${data.text}..." | Voice: ${data.voice} | Lang: ${data.language}`, timestamp);
+                    break;
+                    
+                case 'speaker-stop':
+                    addLog('warn', `[SPEAKER] Stopped broadcasting in session ${data.sessionCode}`, timestamp);
+                    break;
+                    
+                case 'error':
+                    metrics.errors++;
+                    addLog('error', `[ERROR] ${data.message || JSON.stringify(data)}`, timestamp);
+                    break;
+            }
+        }
+        
+        function addLog(type, message, timestamp = new Date().toISOString()) {
+            const logEntry = { type, message, timestamp };
+            logs.push(logEntry);
+            
+            const logStream = document.getElementById('logStream');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `<span class="timestamp">[${timestamp.split('T')[1].split('.')[0]}]</span> ${message}`;
+            logStream.appendChild(entry);
+            
+            // Keep only last 500 logs
+            if (logs.length > 500) {
+                logs.shift();
+                logStream.removeChild(logStream.firstChild);
+            }
+            
+            if (autoScroll) {
+                logStream.scrollTop = logStream.scrollHeight;
+            }
+        }
+        
+        function updateSession(code, updates) {
+            const session = sessions.get(code) || { 
+                code, 
+                speaker: false, 
+                listeners: 0, 
+                sourceLanguage: 'auto',
+                created: new Date()
+            };
+            
+            Object.assign(session, updates);
+            sessions.set(code, session);
+            
+            renderSessions();
+        }
+        
+        function renderSessions() {
+            const sessionList = document.getElementById('sessionList');
+            sessionList.innerHTML = '';
+            
+            let activeSessions = 0;
+            let totalSpeakers = 0;
+            let totalListeners = 0;
+            
+            sessions.forEach(session => {
+                if (session.speaker || session.listeners > 0) {
+                    activeSessions++;
+                    if (session.speaker) totalSpeakers++;
+                    totalListeners += session.listeners;
+                    
+                    const item = document.createElement('div');
+                    item.className = 'session-item';
+                    item.innerHTML = `
+                        <div class="session-code">${session.code}</div>
+                        <div class="session-details">
+                            Speaker: ${session.speaker ? '✅' : '❌'} | 
+                            Listeners: ${session.listeners} | 
+                            Language: ${session.sourceLanguage}
+                        </div>
+                    `;
+                    sessionList.appendChild(item);
+                }
+            });
+            
+            document.getElementById('activeSessions').textContent = activeSessions;
+            document.getElementById('totalSpeakers').textContent = totalSpeakers;
+            document.getElementById('totalListeners').textContent = totalListeners;
+        }
+        
+        async function fetchStats() {
+            try {
+                const response = await fetch('http://localhost:3004/health');
+                const data = await response.json();
+                
+                // Update uptime
+                const uptimeSeconds = Math.floor(data.uptime);
+                const hours = Math.floor(uptimeSeconds / 3600);
+                const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+                const seconds = uptimeSeconds % 60;
+                document.getElementById('uptime').textContent = 
+                    `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            } catch (error) {
+                console.error('Failed to fetch stats:', error);
+            }
+        }
+        
+        function clearLogs() {
+            logs = [];
+            document.getElementById('logStream').innerHTML = '';
+            addLog('info', 'Logs cleared');
+        }
+        
+        function exportLogs() {
+            const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `logs-${new Date().toISOString()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            addLog('success', 'Logs exported');
+        }
+        
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            event.target.textContent = `Auto-Scroll: ${autoScroll ? 'ON' : 'OFF'}`;
+        }
+        
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeSocket();
+            addLog('info', 'Monitor dashboard initialized');
+        });
+    </script>
+</body>
+</html>

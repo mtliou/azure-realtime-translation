@@ -852,12 +852,21 @@
         }
         
         async function handleIncomingTranslation(data) {
-            console.log('Handling incoming translation:', data);
+            console.log('[LISTENER] 📥 Handling incoming translation:', {
+                sessionCode: sessionCode,
+                sourceLanguage: data.sourceLanguage,
+                targetLanguage: data.targetLanguage,
+                isFinal: data.isFinal,
+                textLength: (data.translatedText || data.translation || data.text || '').length,
+                timestamp: new Date().toISOString()
+            });
+            
             messageCount++;
             document.getElementById('messageCount').textContent = messageCount;
             
             // Update source language display
             if (data.sourceLanguage) {
+                console.log('[LISTENER] 🌐 Source language detected:', data.sourceLanguage);
                 updateSourceLanguageDisplay(data.sourceLanguage);
             }
             
@@ -865,17 +874,34 @@
             const translatedText = data.translatedText || data.translation || data.text;
             const originalText = data.originalText || data.original || data.text;
             
+            console.log('[LISTENER] 📝 Translation content:', {
+                original: originalText ? originalText.substring(0, 50) + '...' : 'none',
+                translated: translatedText ? translatedText.substring(0, 50) + '...' : 'none',
+                isFinal: data.isFinal
+            });
+            
             // Display the translation
             displayTranslation(translatedText, originalText, data.isFinal);
             
             if (data.isFinal) {
                 translationCount++;
                 document.getElementById('translationCount').textContent = translationCount;
+                console.log('[LISTENER] ✅ Final translation #' + translationCount + ' received');
                 
                 // TTS if enabled
-                if (document.getElementById('enableTTS').checked && synthesizer) {
-                    console.log('Speaking text:', translatedText);
+                const ttsEnabled = document.getElementById('enableTTS').checked;
+                console.log('[LISTENER] 🔊 TTS Status:', {
+                    enabled: ttsEnabled,
+                    synthesizerReady: !!synthesizer,
+                    voice: selectedVoice,
+                    willSpeak: ttsEnabled && !!synthesizer
+                });
+                
+                if (ttsEnabled && synthesizer) {
+                    console.log('[LISTENER] 🗣️ Triggering TTS for text:', translatedText.substring(0, 50) + '...');
                     speakText(translatedText);
+                } else if (ttsEnabled && !synthesizer) {
+                    console.error('[LISTENER] ❌ TTS enabled but synthesizer not initialized!');
                 }
             }
         }
@@ -1043,17 +1069,51 @@
         }
         
         function speakText(text) {
-            if (!synthesizer) return;
+            if (!synthesizer) {
+                console.warn('[TTS] Synthesizer not initialized');
+                return;
+            }
+            
+            console.log('[TTS] Starting speech synthesis:', {
+                text: text.substring(0, 50) + '...',
+                voice: selectedVoice,
+                language: targetLanguage,
+                timestamp: new Date().toISOString()
+            });
             
             synthesizer.speakTextAsync(
                 text,
                 result => {
                     if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
-                        console.log("Speech synthesized successfully");
+                        console.log('[TTS] ✅ Speech synthesized successfully:', {
+                            text: text.substring(0, 50) + '...',
+                            duration: result.audioData ? result.audioData.byteLength / 32000 + 's' : 'unknown',
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                        // Log to server for monitoring
+                        if (socket) {
+                            socket.emit('tts-completed', {
+                                sessionCode: sessionCode,
+                                text: text.substring(0, 50),
+                                language: targetLanguage,
+                                voice: selectedVoice
+                            });
+                        }
+                    } else {
+                        console.error('[TTS] ❌ Synthesis failed:', {
+                            reason: result.reason,
+                            errorDetails: result.errorDetails,
+                            text: text.substring(0, 50) + '...'
+                        });
                     }
                 },
                 error => {
-                    console.error("Speech synthesis error:", error);
+                    console.error('[TTS] ❌ Speech synthesis error:', {
+                        error: error.toString(),
+                        text: text.substring(0, 50) + '...',
+                        voice: selectedVoice
+                    });
                 }
             );
         }

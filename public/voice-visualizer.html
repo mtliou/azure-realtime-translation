@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Advanced Voice Visualizer</title>
+    <meta charset="utf-8" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .visualizer-container {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            max-width: 800px;
+        }
+        
+        /* Spectrum Visualizer */
+        .spectrum-visualizer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+        }
+        
+        .spectrum-bar {
+            width: 3px;
+            background: linear-gradient(to top, #3b82f6, #60a5fa, #93c5fd);
+            border-radius: 3px;
+            transition: height 0.05s ease-out;
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+        }
+        
+        .spectrum-bar.active {
+            animation: pulse 0.3s ease-in-out;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(1.2); }
+        }
+        
+        /* Waveform Visualizer */
+        .waveform-visualizer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.7;
+        }
+        
+        .waveform-path {
+            stroke: #10b981;
+            stroke-width: 2;
+            fill: none;
+            filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.5));
+        }
+        
+        /* Circular Visualizer */
+        .circular-visualizer {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .circular-ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 2px solid;
+            opacity: 0.8;
+            animation: rotate 4s linear infinite;
+        }
+        
+        .circular-ring:nth-child(1) {
+            width: 100%;
+            height: 100%;
+            border-color: #60a5fa;
+            animation-duration: 3s;
+        }
+        
+        .circular-ring:nth-child(2) {
+            width: 80%;
+            height: 80%;
+            top: 10%;
+            left: 10%;
+            border-color: #10b981;
+            animation-duration: 4s;
+            animation-direction: reverse;
+        }
+        
+        .circular-ring:nth-child(3) {
+            width: 60%;
+            height: 60%;
+            top: 20%;
+            left: 20%;
+            border-color: #f59e0b;
+            animation-duration: 2s;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Particle Effects */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: radial-gradient(circle, #60a5fa, transparent);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        
+        @keyframes float-up {
+            to {
+                transform: translateY(-100px);
+                opacity: 0;
+            }
+        }
+        
+        /* Controls */
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: rgba(96, 165, 250, 0.2);
+            border: 1px solid #60a5fa;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: rgba(96, 165, 250, 0.3);
+        }
+        
+        button.active {
+            background: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="visualizer-container" id="visualizerContainer">
+        <!-- Spectrum Visualizer -->
+        <div class="spectrum-visualizer" id="spectrumVisualizer"></div>
+        
+        <!-- Waveform Visualizer -->
+        <svg class="waveform-visualizer" id="waveformVisualizer">
+            <path class="waveform-path" id="waveformPath"></path>
+        </svg>
+        
+        <!-- Circular Visualizer -->
+        <div class="circular-visualizer" id="circularVisualizer" style="display: none;">
+            <div class="circular-ring"></div>
+            <div class="circular-ring"></div>
+            <div class="circular-ring"></div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button onclick="setVisualizerType('spectrum')" class="active">Spectrum</button>
+        <button onclick="setVisualizerType('waveform')">Waveform</button>
+        <button onclick="setVisualizerType('circular')">Circular</button>
+        <button onclick="setVisualizerType('combined')">Combined</button>
+    </div>
+
+    <script>
+        let audioContext;
+        let analyser;
+        let microphone;
+        let dataArray;
+        let animationId;
+        let visualizerType = 'spectrum';
+        
+        // Initialize spectrum bars
+        const spectrumVisualizer = document.getElementById('spectrumVisualizer');
+        const barCount = 64;
+        const bars = [];
+        
+        for (let i = 0; i < barCount; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'spectrum-bar';
+            bar.style.height = '10px';
+            spectrumVisualizer.appendChild(bar);
+            bars.push(bar);
+        }
+        
+        // Initialize audio
+        async function initAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 128;
+                analyser.smoothingTimeConstant = 0.8;
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                animate();
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+            analyser.getByteFrequencyData(dataArray);
+            
+            if (visualizerType === 'spectrum' || visualizerType === 'combined') {
+                updateSpectrum();
+            }
+            
+            if (visualizerType === 'waveform' || visualizerType === 'combined') {
+                updateWaveform();
+            }
+            
+            if (visualizerType === 'circular' || visualizerType === 'combined') {
+                updateCircular();
+            }
+            
+            // Create particles on high volume
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            if (average > 100 && Math.random() > 0.8) {
+                createParticle();
+            }
+        }
+        
+        // Update spectrum visualizer
+        function updateSpectrum() {
+            const barWidth = barCount;
+            
+            for (let i = 0; i < barCount; i++) {
+                const value = dataArray[Math.floor(i * dataArray.length / barCount)];
+                const height = (value / 255) * 150;
+                
+                bars[i].style.height = `${Math.max(10, height)}px`;
+                
+                // Add glow effect for high values
+                if (value > 200) {
+                    bars[i].style.boxShadow = `0 0 20px rgba(96, 165, 250, ${value/255})`;
+                    bars[i].classList.add('active');
+                } else {
+                    bars[i].classList.remove('active');
+                }
+                
+                // Color gradient based on frequency
+                const hue = (i / barCount) * 60 + 200; // Blue to purple range
+                bars[i].style.background = `linear-gradient(to top, 
+                    hsl(${hue}, 70%, 50%), 
+                    hsl(${hue}, 70%, 70%))`;
+            }
+        }
+        
+        // Update waveform visualizer
+        function updateWaveform() {
+            const width = document.getElementById('waveformVisualizer').clientWidth;
+            const height = document.getElementById('waveformVisualizer').clientHeight;
+            
+            let path = `M 0 ${height/2}`;
+            
+            for (let i = 0; i < dataArray.length; i++) {
+                const x = (i / dataArray.length) * width;
+                const y = height/2 + ((dataArray[i] - 128) / 128) * (height/3);
+                
+                if (i === 0) {
+                    path += ` L ${x} ${y}`;
+                } else {
+                    const prevX = ((i-1) / dataArray.length) * width;
+                    const prevY = height/2 + ((dataArray[i-1] - 128) / 128) * (height/3);
+                    const cpX = (prevX + x) / 2;
+                    path += ` Q ${cpX} ${prevY} ${x} ${y}`;
+                }
+            }
+            
+            document.getElementById('waveformPath').setAttribute('d', path);
+        }
+        
+        // Update circular visualizer
+        function updateCircular() {
+            const rings = document.querySelectorAll('.circular-ring');
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            
+            rings.forEach((ring, index) => {
+                const scale = 1 + (average / 255) * 0.3 * (index + 1) * 0.3;
+                ring.style.transform = `scale(${scale})`;
+                ring.style.borderWidth = `${2 + (average / 255) * 3}px`;
+                ring.style.opacity = 0.3 + (average / 255) * 0.7;
+            });
+        }
+        
+        // Create particle effect
+        function createParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = `${Math.random() * 100}%`;
+            particle.style.bottom = '0';
+            particle.style.animation = 'float-up 2s ease-out forwards';
+            
+            document.getElementById('visualizerContainer').appendChild(particle);
+            
+            setTimeout(() => particle.remove(), 2000);
+        }
+        
+        // Set visualizer type
+        function setVisualizerType(type) {
+            visualizerType = type;
+            
+            // Update button states
+            document.querySelectorAll('button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Show/hide visualizers
+            document.getElementById('spectrumVisualizer').style.display = 
+                (type === 'spectrum' || type === 'combined') ? 'flex' : 'none';
+            
+            document.getElementById('waveformVisualizer').style.display = 
+                (type === 'waveform' || type === 'combined') ? 'block' : 'none';
+            
+            document.getElementById('circularVisualizer').style.display = 
+                (type === 'circular' || type === 'combined') ? 'block' : 'none';
+        }
+        
+        // Auto-start on click
+        document.addEventListener('click', () => {
+            if (!audioContext) {
+                initAudio();
+            }
+        }, { once: true });
+        
+        // Show prompt
+        console.log('Click anywhere to start the voice visualizer');
+    </script>
+</body>
+</html>

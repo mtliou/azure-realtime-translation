@@ -264,7 +264,9 @@ class TranslationService {
                 data: [{
                     'text': text
                 }],
-                timeout: 500 // 500ms timeout for ultra-low latency
+                timeout: 200, // 200ms timeout for ultra-low latency
+                maxRedirects: 0, // Skip redirects for speed
+                decompress: false // Skip decompression for speed
             });
             
             if (response.data && response.data[0] && response.data[0].translations) {

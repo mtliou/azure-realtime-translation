@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Listener - Ultra-Low Latency Streaming</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            color: white;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            background: linear-gradient(90deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .latency-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        
+        .join-section {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            text-align: center;
+        }
+        
+        .join-section h2 {
+            color: #60a5fa;
+            margin-bottom: 25px;
+        }
+        
+        .input-group {
+            margin-bottom: 25px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 10px;
+            color: #888;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+        
+        input[type="text"], select {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+        
+        input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 10px 0;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(96, 165, 250, 0.3);
+        }
+        
+        button:disabled {
+            background: #333;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        button.disconnect {
+            background: linear-gradient(135deg, #f87171, #ef4444);
+        }
+        
+        .main-content {
+            display: none;
+            grid-template-columns: 350px 1fr;
+            gap: 30px;
+        }
+        
+        .main-content.active {
+            display: grid;
+        }
+        
+        .control-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            height: fit-content;
+        }
+        
+        .control-panel h2 {
+            color: #60a5fa;
+            margin-bottom: 25px;
+            font-size: 1.3em;
+        }
+        
+        .tts-queue {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .tts-queue h3 {
+            color: #10b981;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+        
+        .queue-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(16, 185, 129, 0.1);
+            border-left: 3px solid #10b981;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        
+        .queue-item.playing {
+            background: rgba(16, 185, 129, 0.3);
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .audio-visualizer {
+            height: 80px;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(16, 185, 129, 0.1));
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            padding: 15px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .audio-visualizer::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+            animation: pulse 3s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(0.8); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+        
+        .audio-bar {
+            width: 3px;
+            height: 10px;
+            background: linear-gradient(to top, #059669, #10b981, #34d399);
+            border-radius: 3px;
+            transition: all 0.1s ease-out;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 0 5px rgba(16, 185, 129, 0.5);
+        }
+        
+        .audio-bar.active {
+            animation: audioWave 0.3s ease-in-out;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.8);
+        }
+        
+        @keyframes audioWave {
+            0%, 100% { 
+                transform: scaleY(1);
+                filter: brightness(1);
+            }
+            50% { 
+                transform: scaleY(1.5);
+                filter: brightness(1.5);
+            }
+        }
+        
+        .audio-bar.speaking {
+            background: linear-gradient(to top, #0ea5e9, #06b6d4, #22d3ee);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+        }
+        
+        .streaming-area {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+        }
+        
+        .latency-monitor {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .latency-card {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .latency-label {
+            font-size: 0.8em;
+            color: #888;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        
+        .latency-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #10b981;
+        }
+        
+        .transcript-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 25px;
+            min-height: 400px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .transcript-container h3 {
+            color: #60a5fa;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .transcript-item {
+            padding: 15px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border-left: 3px solid #60a5fa;
+            position: relative;
+        }
+        
+        .transcript-item.streaming {
+            border-left-color: #10b981;
+        }
+        
+        .transcript-item.speaking {
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .tts-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 3px 8px;
+            background: #10b981;
+            color: white;
+            border-radius: 4px;
+            font-size: 0.7em;
+            text-transform: uppercase;
+        }
+        
+        .transcript-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.85em;
+            color: #888;
+        }
+        
+        .transcript-text {
+            color: white;
+            line-height: 1.6;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .stat-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #60a5fa;
+        }
+        
+        .stat-label {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 5px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎧 Ultra-Low Latency Listener</h1>
+            <p style="color: #888;">Immediate TTS Playback • Sentence-Level Streaming</p>
+            <div class="latency-badge">⚡ Streaming Optimized: Instant playback</div>
+        </div>
+        
+        <!-- Join Section -->
+        <div class="join-section" id="joinSection">
+            <h2>Join Translation Session</h2>
+            
+            <div class="input-group">
+                <label>Enter Session Code</label>
+                <input type="text" id="sessionCodeInput" placeholder="ABCD" maxlength="4" />
+            </div>
+            
+            <div class="input-group">
+                <label>Your Preferred Language</label>
+                <select id="targetLanguage">
+                    <option value="en">English</option>
+                    <option value="fr">French</option>
+                    <option value="es">Spanish</option>
+                    <option value="de">German</option>
+                    <option value="it">Italian</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="zh-Hans">Chinese (Simplified)</option>
+                    <option value="ja">Japanese</option>
+                </select>
+            </div>
+            
+            <button onclick="joinSession()">
+                🚀 Join Session
+            </button>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <div class="control-panel">
+                <h2>Session Controls</h2>
+                
+                <div class="tts-queue">
+                    <h3>🔊 TTS Queue</h3>
+                    <div id="ttsQueueDisplay">
+                        <div style="color: #888; text-align: center;">Waiting for sentences...</div>
+                    </div>
+                    <div class="audio-visualizer" id="audioVisualizer" style="margin-top: 15px;">
+                        <!-- Dynamic bars will be added by JavaScript -->
+                    </div>
+                </div>
+                
+                <button class="disconnect" onclick="leaveSession()">
+                    ⏹ Leave Session
+                </button>
+                
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-value" id="sentencesReceived">0</div>
+                        <div class="stat-label">Sentences</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="ttsPlayed">0</div>
+                        <div class="stat-label">TTS Played</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="queueSize">0</div>
+                        <div class="stat-label">Queue Size</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="avgDelay">0ms</div>
+                        <div class="stat-label">Avg Delay</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="streaming-area">
+                <div class="latency-monitor">
+                    <div class="latency-card">
+                        <div class="latency-label">Network Latency</div>
+                        <div class="latency-value" id="networkLatency">0ms</div>
+                    </div>
+                    <div class="latency-card">
+                        <div class="latency-label">Translation Time</div>
+                        <div class="latency-value" id="translationTime">0ms</div>
+                    </div>
+                    <div class="latency-card">
+                        <div class="latency-label">TTS Generation</div>
+                        <div class="latency-value" id="ttsTime">0ms</div>
+                    </div>
+                </div>
+                
+                <div class="transcript-container">
+                    <h3>
+                        <span class="status-dot active"></span>
+                        Live Streaming Translations
+                    </h3>
+                    <div id="transcript"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3001/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let socket;
+        
+        // Session
+        let sessionCode;
+        let targetLanguage;
+        let isConnected = false;
+        
+        // TTS Queue System
+        let synthesizer;
+        let ttsQueue = [];
+        let isPlayingTTS = false;
+        let selectedVoice = null;
+        
+        // Stats
+        let sentencesReceived = 0;
+        let ttsPlayed = 0;
+        let latencies = [];
+        
+        // Voice mapping
+        const voiceMap = {
+            'en-US': 'en-US-JennyNeural',
+            'fr-FR': 'fr-FR-DeniseNeural',
+            'es-ES': 'es-ES-ElviraNeural',
+            'de-DE': 'de-DE-KatjaNeural',
+            'it-IT': 'it-IT-ElsaNeural',
+            'pt-BR': 'pt-BR-FranciscaNeural',
+            'zh-CN': 'zh-CN-XiaoxiaoNeural',
+            'ja-JP': 'ja-JP-NanamiNeural'
+        };
+        
+        // Language mapping
+        const languageNames = {
+            'en': { name: 'English', code: 'en-US' },
+            'fr': { name: 'French', code: 'fr-FR' },
+            'es': { name: 'Spanish', code: 'es-ES' },
+            'de': { name: 'German', code: 'de-DE' },
+            'it': { name: 'Italian', code: 'it-IT' },
+            'pt': { name: 'Portuguese', code: 'pt-BR' },
+            'zh-Hans': { name: 'Chinese', code: 'zh-CN' },
+            'ja': { name: 'Japanese', code: 'ja-JP' }
+        };
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            initializeSDK(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                initializeSocket();
+                setupEventListeners();
+                initializeVisualizer();
+            });
+        });
+        
+        function initializeSDK(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+        
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                console.log('[SOCKET] Connected to streaming server');
+            });
+            
+            // Listen for streaming translations
+            socket.on('translation', (data) => {
+                console.log('[STREAM] Received translation:', data);
+                handleStreamingTranslation(data);
+            });
+            
+            // Compatibility with old event name
+            socket.on('translation-data', (data) => {
+                console.log('[STREAM] Received translation-data:', data);
+                handleStreamingTranslation(data);
+            });
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('sessionCodeInput').addEventListener('input', (e) => {
+                e.target.value = e.target.value.toUpperCase();
+            });
+            
+            document.getElementById('sessionCodeInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    joinSession();
+                }
+            });
+        }
+        
+        async function requestAuthorizationToken() {
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                return res.data.region;
+            } catch (err) {
+                console.error('[AUTH] Failed to get token:', err);
+                throw err;
+            }
+        }
+        
+        async function joinSession() {
+            sessionCode = document.getElementById('sessionCodeInput').value.trim();
+            targetLanguage = document.getElementById('targetLanguage').value;
+            
+            if (sessionCode.length !== 4) {
+                alert('Please enter a valid 4-character session code');
+                return;
+            }
+            
+            try {
+                // Get authorization for TTS
+                await requestAuthorizationToken();
+                
+                // Initialize TTS synthesizer
+                await initializeTTS();
+                
+                // Join WebSocket room
+                socket.emit('listener-join', {
+                    sessionCode: sessionCode,
+                    targetLanguage: targetLanguage
+                });
+                
+                // Update UI
+                document.getElementById('joinSection').style.display = 'none';
+                document.getElementById('mainContent').classList.add('active');
+                
+                isConnected = true;
+                console.log('[SESSION] Joined:', sessionCode);
+                
+            } catch (error) {
+                console.error('[JOIN] Failed:', error);
+                alert('Failed to join session: ' + error.message);
+            }
+        }
+        
+        async function initializeTTS() {
+            try {
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    serviceRegion
+                );
+                
+                // Configure for streaming
+                const langCode = languageNames[targetLanguage].code;
+                speechConfig.speechSynthesisVoiceName = voiceMap[langCode];
+                selectedVoice = voiceMap[langCode];
+                
+                // Enable streaming for lower latency
+                speechConfig.speechSynthesisOutputFormat = 
+                    SpeechSDK.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+                
+                synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig);
+                
+                console.log('[TTS] Initialized with voice:', selectedVoice);
+                
+            } catch (error) {
+                console.error('[TTS] Initialization failed:', error);
+            }
+        }
+        
+        function handleStreamingTranslation(data) {
+            const receiveTime = Date.now();
+            
+            // Handle partial transcripts for real-time display
+            if (data.isPartial) {
+                const translatedText = data.translatedText || data.translation || data.text;
+                displayPartialTranslation(translatedText, data.originalText, data.sourceLanguage);
+                
+                // Update latency
+                if (data.timestamp) {
+                    const latency = receiveTime - data.timestamp;
+                    updateLatencyDisplay(latency);
+                }
+                return; // Don't queue partials for TTS
+            }
+            
+            // Check if this is a sentence chunk
+            if (data.isSentence || data.isStreaming) {
+                sentencesReceived++;
+                document.getElementById('sentencesReceived').textContent = sentencesReceived;
+                
+                const translatedText = data.translatedText || data.translation || data.text;
+                
+                if (translatedText && translatedText.trim().length > 0) {
+                    // Add to TTS queue immediately
+                    queueTTS(translatedText, data.timestamp || receiveTime);
+                    
+                    // Display translation
+                    displayStreamingTranslation(translatedText, data.originalText, data.isFinal);
+                    
+                    // Calculate latency
+                    if (data.timestamp) {
+                        const latency = receiveTime - data.timestamp;
+                        latencies.push(latency);
+                        updateLatencyDisplay(latency);
+                    }
+                }
+            } else if (data.isFinal) {
+                // Handle traditional final results as fallback
+                const translatedText = data.translatedText || data.translation || data.text;
+                if (translatedText && translatedText.trim().length > 0) {
+                    queueTTS(translatedText, receiveTime);
+                    displayStreamingTranslation(translatedText, data.originalText, true);
+                }
+            }
+        }
+        
+        function queueTTS(text, timestamp) {
+            // Add to queue
+            ttsQueue.push({
+                text: text,
+                timestamp: timestamp,
+                id: Date.now()
+            });
+            
+            updateQueueDisplay();
+            
+            // Start processing if not already playing
+            if (!isPlayingTTS) {
+                processTTSQueue();
+            }
+            
+            console.log('[TTS-QUEUE] Added to queue:', text.substring(0, 30) + '...');
+        }
+        
+        async function processTTSQueue() {
+            if (ttsQueue.length === 0) {
+                isPlayingTTS = false;
+                updateAudioVisualizer(false);
+                return;
+            }
+            
+            isPlayingTTS = true;
+            updateAudioVisualizer(true);
+            
+            const item = ttsQueue.shift();
+            const startTime = Date.now();
+            
+            console.log('[TTS-PLAY] Starting synthesis:', item.text.substring(0, 30) + '...');
+            
+            // Update queue display
+            updateQueueDisplay();
+            markTranscriptAsSpeaking(item.id);
+            
+            try {
+                await new Promise((resolve, reject) => {
+                    synthesizer.speakTextAsync(
+                        item.text,
+                        result => {
+                            if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                                const duration = Date.now() - startTime;
+                                console.log(`[TTS-COMPLETE] Played in ${duration}ms:`, item.text.substring(0, 30) + '...');
+                                
+                                ttsPlayed++;
+                                document.getElementById('ttsPlayed').textContent = ttsPlayed;
+                                document.getElementById('ttsTime').textContent = `${duration}ms`;
+                                
+                                // Log to server
+                                if (socket) {
+                                    socket.emit('tts-completed', {
+                                        sessionCode: sessionCode,
+                                        text: item.text.substring(0, 50),
+                                        language: targetLanguage,
+                                        voice: selectedVoice,
+                                        duration: duration
+                                    });
+                                }
+                                
+                                resolve();
+                            } else {
+                                console.error('[TTS-ERROR] Synthesis failed:', result);
+                                reject(result);
+                            }
+                        },
+                        error => {
+                            console.error('[TTS-ERROR]', error);
+                            reject(error);
+                        }
+                    );
+                });
+            } catch (error) {
+                console.error('[TTS-ERROR] Failed to play:', error);
+            }
+            
+            // Process next item immediately for continuous playback
+            setTimeout(() => processTTSQueue(), 100);
+        }
+        
+        function updateQueueDisplay() {
+            const display = document.getElementById('ttsQueueDisplay');
+            const queueSize = ttsQueue.length;
+            
+            document.getElementById('queueSize').textContent = queueSize;
+            
+            if (queueSize === 0 && !isPlayingTTS) {
+                display.innerHTML = '<div style="color: #888; text-align: center;">Waiting for sentences...</div>';
+            } else {
+                let html = '';
+                if (isPlayingTTS) {
+                    html += '<div class="queue-item playing">🔊 Playing now...</div>';
+                }
+                ttsQueue.slice(0, 3).forEach((item, index) => {
+                    html += `<div class="queue-item">
+                        ${index + 1}. ${item.text.substring(0, 30)}...
+                    </div>`;
+                });
+                if (queueSize > 3) {
+                    html += `<div style="color: #888; text-align: center;">+${queueSize - 3} more</div>`;
+                }
+                display.innerHTML = html;
+            }
+        }
+        
+        function initializeVisualizer() {
+            const visualizer = document.getElementById('audioVisualizer');
+            const barCount = 32;
+            
+            // Create bars
+            for (let i = 0; i < barCount; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'audio-bar';
+                bar.style.height = '10px';
+                visualizer.appendChild(bar);
+            }
+        }
+        
+        function updateAudioVisualizer(active, intensity = 0.5) {
+            const bars = document.querySelectorAll('.audio-bar');
+            
+            if (active) {
+                // Animate bars with wave effect
+                bars.forEach((bar, index) => {
+                    const delay = index * 0.02;
+                    const height = 10 + Math.sin(Date.now() / 200 + index * 0.5) * 30 * intensity;
+                    const brightness = 0.5 + Math.sin(Date.now() / 300 + index * 0.3) * 0.5;
+                    
+                    bar.style.transition = `all ${0.1 + delay * 0.01}s ease-out`;
+                    bar.style.height = `${Math.max(10, height)}px`;
+                    bar.style.filter = `brightness(${1 + brightness})`;
+                    bar.classList.add('active');
+                    
+                    if (isPlayingTTS) {
+                        bar.classList.add('speaking');
+                    }
+                    
+                    // Random pulse effect
+                    if (Math.random() > 0.95) {
+                        bar.style.transform = `scaleY(${1.5 + Math.random() * 0.5})`;
+                        setTimeout(() => {
+                            bar.style.transform = 'scaleY(1)';
+                        }, 200);
+                    }
+                });
+                
+                // Continue animation
+                if (active) {
+                    requestAnimationFrame(() => updateAudioVisualizer(active, intensity));
+                }
+            } else {
+                // Reset bars
+                bars.forEach((bar, index) => {
+                    bar.classList.remove('active', 'speaking');
+                    bar.style.height = '10px';
+                    bar.style.filter = 'brightness(1)';
+                    bar.style.transform = 'scaleY(1)';
+                });
+            }
+        }
+        
+        function displayPartialTranslation(text, originalText, sourceLanguage) {
+            const transcript = document.getElementById('transcript');
+            
+            // Find or create partial element
+            let partial = transcript.querySelector('.partial');
+            if (!partial) {
+                partial = document.createElement('div');
+                partial.className = 'transcript-item partial';
+                partial.style.opacity = '0.6';
+                partial.style.borderLeftColor = '#fbbf24';
+                transcript.appendChild(partial);
+            }
+            
+            const sourceLang = sourceLanguage === 'fr-CA' ? '🇨🇦 FR' :
+                              sourceLanguage === 'en-CA' ? '🇨🇦 EN' :
+                              sourceLanguage === 'en-US' ? '🇺🇸 EN' : '🌐';
+            
+            partial.innerHTML = `
+                <div class="tts-indicator" style="background: #fbbf24;">Partial</div>
+                <div class="transcript-header">
+                    <span>${sourceLang} → ${languageNames[targetLanguage].name}</span>
+                    <span>Translating...</span>
+                </div>
+                <div class="transcript-text">${text}</div>
+            `;
+            
+            transcript.scrollTop = transcript.scrollHeight;
+        }
+        
+        function displayStreamingTranslation(text, originalText, isFinal) {
+            const transcript = document.getElementById('transcript');
+            
+            // Remove partial if exists
+            const partial = transcript.querySelector('.partial');
+            if (partial) partial.remove();
+            
+            const item = document.createElement('div');
+            item.className = 'transcript-item streaming';
+            item.dataset.id = Date.now();
+            
+            if (isPlayingTTS) {
+                item.classList.add('speaking');
+            }
+            
+            item.innerHTML = `
+                ${isFinal ? '' : '<div class="tts-indicator">Streaming</div>'}
+                <div class="transcript-header">
+                    <span>${languageNames[targetLanguage].name}</span>
+                    <span>${new Date().toLocaleTimeString()}</span>
+                </div>
+                <div class="transcript-text">${text}</div>
+            `;
+            
+            transcript.appendChild(item);
+            transcript.scrollTop = transcript.scrollHeight;
+        }
+        
+        function markTranscriptAsSpeaking(id) {
+            const items = document.querySelectorAll('.transcript-item');
+            items.forEach(item => {
+                item.classList.remove('speaking');
+                if (item.dataset.id == id) {
+                    item.classList.add('speaking');
+                }
+            });
+        }
+        
+        function updateLatencyDisplay(latency) {
+            document.getElementById('networkLatency').textContent = `${latency}ms`;
+            
+            if (latencies.length > 0) {
+                const avgLatency = Math.round(
+                    latencies.slice(-10).reduce((a, b) => a + b) / 
+                    Math.min(latencies.length, 10)
+                );
+                document.getElementById('avgDelay').textContent = `${avgLatency}ms`;
+            }
+        }
+        
+        function leaveSession() {
+            if (socket && sessionCode) {
+                socket.emit('listener-leave', {
+                    sessionCode: sessionCode
+                });
+            }
+            
+            if (synthesizer) {
+                synthesizer.close();
+                synthesizer = null;
+            }
+            
+            // Reset UI
+            document.getElementById('joinSection').style.display = 'block';
+            document.getElementById('mainContent').classList.remove('active');
+            document.getElementById('transcript').innerHTML = '';
+            document.getElementById('sessionCodeInput').value = '';
+            
+            // Clear queue
+            ttsQueue = [];
+            isPlayingTTS = false;
+            isConnected = false;
+            sessionCode = null;
+        }
+    </script>
+</body>
+</html>
