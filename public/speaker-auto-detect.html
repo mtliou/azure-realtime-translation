@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Speaker - Auto Language Detection</title>
+    <meta charset="utf-8" />
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="./microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f0f 100%);
+            min-height: 100vh;
+            color: white;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .session-info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .session-code {
+            font-size: 2em;
+            font-weight: bold;
+            padding: 15px 30px;
+            background: rgba(74, 222, 128, 0.2);
+            border: 2px solid #4ade80;
+            border-radius: 15px;
+            letter-spacing: 5px;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 30px;
+        }
+        
+        .control-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            height: fit-content;
+        }
+        
+        .control-panel h2 {
+            color: #4ade80;
+            margin-bottom: 25px;
+            font-size: 1.3em;
+        }
+        
+        .language-detector {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        
+        .detected-language {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 15px 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .language-flag {
+            font-size: 1.5em;
+            margin-right: 15px;
+        }
+        
+        .confidence-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+            transition: width 0.3s;
+        }
+        
+        .control-group {
+            margin-bottom: 25px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 10px;
+            color: #888;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+        
+        select, button {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #4ade80;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 10px 0;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(74, 222, 128, 0.3);
+        }
+        
+        button:disabled {
+            background: #333;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        button.stop {
+            background: linear-gradient(135deg, #f87171, #ef4444);
+        }
+        
+        .streaming-area {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+        }
+        
+        .waveform-container {
+            height: 150px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #waveform {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .transcript-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 25px;
+            min-height: 400px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .transcript-container h3 {
+            color: #4ade80;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #444;
+        }
+        
+        .status-dot.active {
+            background: #4ade80;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .transcript-item {
+            padding: 15px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border-left: 3px solid #4ade80;
+        }
+        
+        .transcript-item.partial {
+            opacity: 0.7;
+            border-left-color: #888;
+        }
+        
+        .transcript-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.85em;
+            color: #888;
+        }
+        
+        .transcript-text {
+            color: white;
+            line-height: 1.6;
+        }
+        
+        .listeners-panel {
+            margin-top: 25px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+        }
+        
+        .listeners-panel h3 {
+            color: #4ade80;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+        
+        .listener-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        
+        .listener-lang {
+            padding: 4px 12px;
+            background: rgba(74, 222, 128, 0.2);
+            border-radius: 20px;
+            font-size: 0.85em;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .stat-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #4ade80;
+        }
+        
+        .stat-label {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 5px;
+            text-transform: uppercase;
+        }
+        
+        .error-message {
+            display: none;
+            padding: 15px;
+            background: rgba(248, 113, 113, 0.2);
+            border: 1px solid #f87171;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .supported-languages {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .lang-chip {
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            font-size: 0.9em;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎤 Speaker Broadcasting</h1>
+            <p style="color: #888;">Automatic Language Detection • Real-time Translation</p>
+            <div class="session-info">
+                <div>
+                    <div style="color: #888; margin-bottom: 10px;">Session Code</div>
+                    <div class="session-code" id="sessionCode">----</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="main-content">
+            <div class="control-panel">
+                <h2>Broadcasting Controls</h2>
+                
+                <div class="language-detector">
+                    <div style="color: #888; font-size: 0.9em;">Detected Language</div>
+                    <div class="detected-language" id="detectedLanguage">
+                        <span class="language-flag" id="languageFlag">🌐</span>
+                        <span id="languageName">--</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
+                    </div>
+                    <div style="color: #888; font-size: 0.85em;">
+                        Confidence: <span id="confidenceValue">0%</span>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Language Detection Mode</label>
+                    <select id="detectionMode">
+                        <option value="auto">Automatic (All Languages)</option>
+                        <option value="bilingual">Bilingual (EN/FR)</option>
+                        <option value="multilingual">Multilingual (5 Languages)</option>
+                        <option value="single">Single Language</option>
+                    </select>
+                </div>
+                
+                <div class="control-group" id="singleLanguageGroup" style="display: none;">
+                    <label>Select Language</label>
+                    <select id="singleLanguage">
+                        <option value="en-US">English (US)</option>
+                        <option value="en-CA">English (Canada)</option>
+                        <option value="fr-CA">French (Canada)</option>
+                        <option value="fr-FR">French (France)</option>
+                        <option value="es-ES">Spanish</option>
+                        <option value="de-DE">German</option>
+                        <option value="it-IT">Italian</option>
+                        <option value="pt-BR">Portuguese (Brazil)</option>
+                        <option value="zh-CN">Chinese (Mandarin)</option>
+                        <option value="ja-JP">Japanese</option>
+                    </select>
+                </div>
+                
+                <button id="startBtn" onclick="startBroadcasting()">
+                    🚀 Start Broadcasting
+                </button>
+                <button id="stopBtn" class="stop" onclick="stopBroadcasting()" disabled>
+                    ⏹ Stop Broadcasting
+                </button>
+                
+                <div class="listeners-panel">
+                    <h3>Active Listeners</h3>
+                    <div id="listenersList">
+                        <div style="color: #888; text-align: center; padding: 20px;">
+                            No listeners connected
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-value" id="wordCount">0</div>
+                        <div class="stat-label">Words</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="duration">0:00</div>
+                        <div class="stat-label">Duration</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="langChanges">0</div>
+                        <div class="stat-label">Languages</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="streaming-area">
+                <div class="waveform-container">
+                    <canvas id="waveform"></canvas>
+                </div>
+                
+                <div class="transcript-container">
+                    <h3>
+                        <span class="status-dot" id="transcriptStatus"></span>
+                        Live Transcript
+                    </h3>
+                    <div id="transcript"></div>
+                </div>
+                
+                <div class="supported-languages">
+                    <div class="lang-chip">🇬🇧 English</div>
+                    <div class="lang-chip">🇫🇷 French</div>
+                    <div class="lang-chip">🇪🇸 Spanish</div>
+                    <div class="lang-chip">🇩🇪 German</div>
+                    <div class="lang-chip">🇮🇹 Italian</div>
+                    <div class="lang-chip">🇵🇹 Portuguese</div>
+                    <div class="lang-chip">🇨🇳 Chinese</div>
+                    <div class="lang-chip">🇯🇵 Japanese</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let authorizationEndpoint = "http://localhost:3001/api/get-speech-token";
+        let authorizationToken;
+        let serviceRegion;
+        let SpeechSDK;
+        let socket;
+        
+        // Recognition
+        let recognizer;
+        let isRecognizing = false;
+        
+        // Session
+        let sessionCode;
+        let detectedLanguages = new Set();
+        let currentLanguage = null;
+        
+        // Stats
+        let startTime;
+        let wordCount = 0;
+        let languageChanges = 0;
+        
+        // Audio visualization
+        let audioContext;
+        let analyser;
+        let waveformCanvas;
+        let waveformCtx;
+        
+        // Language mapping
+        const languageNames = {
+            'en-US': { name: 'English', flag: '🇺🇸' },
+            'en-CA': { name: 'English', flag: '🇨🇦' },
+            'fr-CA': { name: 'Français', flag: '🇨🇦' },
+            'fr-FR': { name: 'Français', flag: '🇫🇷' },
+            'es-ES': { name: 'Español', flag: '🇪🇸' },
+            'de-DE': { name: 'Deutsch', flag: '🇩🇪' },
+            'it-IT': { name: 'Italiano', flag: '🇮🇹' },
+            'pt-BR': { name: 'Português', flag: '🇧🇷' },
+            'zh-CN': { name: '中文', flag: '🇨🇳' },
+            'ja-JP': { name: '日本語', flag: '🇯🇵' }
+        };
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function () {
+            initializeSDK(function (speechSdk) {
+                SpeechSDK = speechSdk;
+                initializeSocket();
+                initializeCanvas();
+                generateSessionCode();
+                setupEventListeners();
+            });
+        });
+        
+        function initializeSDK(onComplete) {
+            if (!!window.SpeechSDK) {
+                onComplete(window.SpeechSDK);
+            }
+        }
+        
+        function initializeSocket() {
+            socket = io('http://localhost:3004');
+            
+            socket.on('connect', () => {
+                console.log('Connected to WebSocket server');
+            });
+            
+            socket.on('listener-joined', (data) => {
+                updateListenersList(data);
+            });
+            
+            socket.on('listener-left', (data) => {
+                updateListenersList(data);
+            });
+        }
+        
+        function initializeCanvas() {
+            waveformCanvas = document.getElementById('waveform');
+            waveformCtx = waveformCanvas.getContext('2d');
+            waveformCanvas.width = waveformCanvas.offsetWidth;
+            waveformCanvas.height = waveformCanvas.offsetHeight;
+            drawWaveform();
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('detectionMode').addEventListener('change', (e) => {
+                const singleGroup = document.getElementById('singleLanguageGroup');
+                singleGroup.style.display = e.target.value === 'single' ? 'block' : 'none';
+            });
+        }
+        
+        function generateSessionCode() {
+            sessionCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+            document.getElementById('sessionCode').textContent = sessionCode;
+        }
+        
+        async function requestAuthorizationToken() {
+            try {
+                const res = await axios.get(authorizationEndpoint);
+                authorizationToken = res.data.token;
+                serviceRegion = res.data.region;
+                return res.data.region;
+            } catch (err) {
+                if (err.response && err.response.status === 401) {
+                    showError('Authentication failed. Please configure your Azure credentials. <a href="setup-guide.html" style="color: #4ade80;">View Setup Guide</a>');
+                } else {
+                    showError('Failed to get authorization token: ' + err.message);
+                }
+                throw err;
+            }
+        }
+        
+        async function startBroadcasting() {
+            try {
+                // Reset stats
+                startTime = Date.now();
+                wordCount = 0;
+                languageChanges = 0;
+                detectedLanguages.clear();
+                
+                // Get authorization
+                await requestAuthorizationToken();
+                
+                // Create speech config
+                const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+                    authorizationToken,
+                    serviceRegion
+                );
+                
+                // Configure based on detection mode
+                const mode = document.getElementById('detectionMode').value;
+                
+                // Set output format
+                speechConfig.outputFormat = SpeechSDK.OutputFormat.Detailed;
+                
+                // Audio config
+                const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+                
+                if (mode === 'single') {
+                    // Single language mode
+                    speechConfig.speechRecognitionLanguage = document.getElementById('singleLanguage').value;
+                    
+                    // Create recognizer
+                    recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+                } else {
+                    // Auto detection mode
+                    let languages = [];
+                    
+                    switch (mode) {
+                        case 'bilingual':
+                            languages = ['en-US', 'fr-CA'];
+                            break;
+                        case 'multilingual':
+                            languages = ['en-US', 'fr-CA', 'es-ES', 'de-DE', 'it-IT'];
+                            break;
+                        case 'auto':
+                        default:
+                            languages = ['en-US', 'fr-CA', 'es-ES', 'de-DE', 'it-IT', 'pt-BR', 'zh-CN', 'ja-JP'];
+                            break;
+                    }
+                    
+                    // Create auto-detect config
+                    const autoDetectConfig = SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages(languages);
+                    
+                    // Create recognizer with auto-detection
+                    recognizer = SpeechSDK.SpeechRecognizer.FromConfig(speechConfig, autoDetectConfig, audioConfig);
+                }
+                
+                // Setup handlers
+                setupRecognitionHandlers();
+                
+                // Start audio visualization
+                await startAudioVisualization();
+                
+                // Join WebSocket room
+                socket.emit('speaker-join', {
+                    sessionCode: sessionCode,
+                    sourceLanguage: mode === 'single' ? document.getElementById('singleLanguage').value : 'auto'
+                });
+                
+                // Start recognition
+                recognizer.startContinuousRecognitionAsync(
+                    () => {
+                        console.log("Recognition started");
+                        isRecognizing = true;
+                        updateUI(true);
+                    },
+                    (err) => {
+                        showError("Failed to start recognition: " + err);
+                        isRecognizing = false;
+                        updateUI(false);
+                    }
+                );
+                
+                // Start duration timer
+                updateDuration();
+                
+            } catch (error) {
+                showError('Failed to start broadcasting: ' + error.message);
+                console.error(error);
+            }
+        }
+        
+        function setupRecognitionHandlers() {
+            // Recognizing event - partial results
+            recognizer.recognizing = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizingSpeech) {
+                    const text = e.result.text;
+                    const language = detectLanguageFromResult(e.result);
+                    
+                    displayTranscript(text, language, false);
+                    
+                    // Send partial to listeners
+                    socket.emit('speech-data', {
+                        sessionCode: sessionCode,
+                        text: text,
+                        language: language,
+                        isFinal: false,
+                        timestamp: Date.now()
+                    });
+                }
+            };
+            
+            // Recognized event - final results
+            recognizer.recognized = (s, e) => {
+                if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                    const text = e.result.text;
+                    const language = detectLanguageFromResult(e.result);
+                    
+                    // Update language detection
+                    if (language && language !== currentLanguage) {
+                        currentLanguage = language;
+                        updateLanguageDisplay(language, 0.95);
+                        detectedLanguages.add(language);
+                        languageChanges++;
+                        document.getElementById('langChanges').textContent = detectedLanguages.size;
+                    }
+                    
+                    displayTranscript(text, language, true);
+                    
+                    // Update word count
+                    wordCount += text.split(' ').length;
+                    document.getElementById('wordCount').textContent = wordCount;
+                    
+                    // Send final to listeners
+                    socket.emit('speech-data', {
+                        sessionCode: sessionCode,
+                        text: text,
+                        language: language,
+                        isFinal: true,
+                        timestamp: Date.now()
+                    });
+                }
+            };
+            
+            // Session events
+            recognizer.sessionStarted = (s, e) => {
+                console.log("Session started:", e.sessionId);
+                document.getElementById('transcriptStatus').classList.add('active');
+            };
+            
+            recognizer.sessionStopped = (s, e) => {
+                console.log("Session stopped:", e.sessionId);
+                document.getElementById('transcriptStatus').classList.remove('active');
+            };
+            
+            // Error handling
+            recognizer.canceled = (s, e) => {
+                console.error("Recognition canceled:", e.errorDetails);
+                showError("Recognition error: " + e.errorDetails);
+                stopBroadcasting();
+            };
+        }
+        
+        function detectLanguageFromResult(result) {
+            // Try to get language from result JSON
+            if (result.json) {
+                try {
+                    const details = JSON.parse(result.json);
+                    if (details.PrimaryLanguage) {
+                        return details.PrimaryLanguage.Language;
+                    }
+                } catch (err) {
+                    console.error('Failed to parse language details:', err);
+                }
+            }
+            
+            // Fallback to configured language
+            const mode = document.getElementById('detectionMode').value;
+            if (mode === 'single') {
+                return document.getElementById('singleLanguage').value;
+            }
+            
+            return currentLanguage || 'unknown';
+        }
+        
+        function updateLanguageDisplay(language, confidence) {
+            const langInfo = languageNames[language] || { name: language, flag: '🌐' };
+            document.getElementById('languageFlag').textContent = langInfo.flag;
+            document.getElementById('languageName').textContent = langInfo.name;
+            
+            const confidencePercent = Math.round(confidence * 100);
+            document.getElementById('confidenceValue').textContent = confidencePercent + '%';
+            document.getElementById('confidenceFill').style.width = confidencePercent + '%';
+        }
+        
+        function displayTranscript(text, language, isFinal) {
+            const transcript = document.getElementById('transcript');
+            
+            if (isFinal) {
+                // Remove any partial elements
+                const partials = transcript.querySelectorAll('.partial');
+                partials.forEach(p => p.remove());
+                
+                // Add final transcript
+                const item = document.createElement('div');
+                item.className = 'transcript-item';
+                
+                const langInfo = languageNames[language] || { name: language, flag: '🌐' };
+                
+                item.innerHTML = `
+                    <div class="transcript-header">
+                        <span>${langInfo.flag} ${langInfo.name}</span>
+                        <span>${new Date().toLocaleTimeString()}</span>
+                    </div>
+                    <div class="transcript-text">${text}</div>
+                `;
+                transcript.appendChild(item);
+            } else {
+                // Update or create partial
+                let partial = transcript.querySelector('.partial');
+                if (!partial) {
+                    partial = document.createElement('div');
+                    partial.className = 'transcript-item partial';
+                    transcript.appendChild(partial);
+                }
+                partial.innerHTML = `
+                    <div class="transcript-header">
+                        <span>Recognizing...</span>
+                    </div>
+                    <div class="transcript-text">${text}</div>
+                `;
+            }
+            
+            // Auto-scroll
+            transcript.scrollTop = transcript.scrollHeight;
+        }
+        
+        async function startAudioVisualization() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+            } catch (err) {
+                console.error('Failed to start audio visualization:', err);
+            }
+        }
+        
+        function drawWaveform() {
+            if (!analyser || !isRecognizing) {
+                requestAnimationFrame(drawWaveform);
+                return;
+            }
+            
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteTimeDomainData(dataArray);
+            
+            waveformCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            waveformCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+            
+            waveformCtx.lineWidth = 2;
+            waveformCtx.strokeStyle = '#4ade80';
+            waveformCtx.beginPath();
+            
+            const sliceWidth = waveformCanvas.width / bufferLength;
+            let x = 0;
+            
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * waveformCanvas.height / 2;
+                
+                if (i === 0) {
+                    waveformCtx.moveTo(x, y);
+                } else {
+                    waveformCtx.lineTo(x, y);
+                }
+                
+                x += sliceWidth;
+            }
+            
+            waveformCtx.lineTo(waveformCanvas.width, waveformCanvas.height / 2);
+            waveformCtx.stroke();
+            
+            requestAnimationFrame(drawWaveform);
+        }
+        
+        function updateDuration() {
+            if (isRecognizing && startTime) {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.getElementById('duration').textContent = 
+                    `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                setTimeout(updateDuration, 1000);
+            }
+        }
+        
+        function updateListenersList(data) {
+            // This would be implemented based on WebSocket data
+            // For now, just show that listeners are connected
+            const list = document.getElementById('listenersList');
+            if (data) {
+                list.innerHTML = `
+                    <div class="listener-item">
+                        <span>Listener ${data.listenerId}</span>
+                        <span class="listener-lang">${data.targetLanguage || 'Auto'}</span>
+                    </div>
+                `;
+            }
+        }
+        
+        function stopBroadcasting() {
+            isRecognizing = false;
+            
+            if (recognizer) {
+                recognizer.stopContinuousRecognitionAsync(
+                    () => {
+                        console.log("Recognition stopped");
+                        recognizer.close();
+                        recognizer = null;
+                    },
+                    (err) => {
+                        console.error("Failed to stop recognition:", err);
+                    }
+                );
+            }
+            
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            // Leave WebSocket room
+            socket.emit('speaker-stop', { sessionCode: sessionCode });
+            
+            updateUI(false);
+        }
+        
+        function updateUI(isActive) {
+            document.getElementById('startBtn').disabled = isActive;
+            document.getElementById('stopBtn').disabled = !isActive;
+            document.getElementById('transcriptStatus').classList.toggle('active', isActive);
+        }
+        
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.innerHTML = '⚠️ ' + message;
+            errorEl.classList.add('show');
+            
+            setTimeout(() => {
+                errorEl.classList.remove('show');
+            }, 10000);
+        }
+    </script>
+</body>
+</html>

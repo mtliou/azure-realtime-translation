@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Azure Speech Translation - Setup Guide</title>
+    <meta charset="utf-8" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .error-box {
+            background: rgba(248, 113, 113, 0.2);
+            border: 2px solid #f87171;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .error-box h2 {
+            color: #f87171;
+            margin-bottom: 10px;
+        }
+        
+        .steps {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .step {
+            margin-bottom: 30px;
+            padding-left: 40px;
+            position: relative;
+        }
+        
+        .step-number {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .step h3 {
+            color: #4ade80;
+            margin-bottom: 10px;
+        }
+        
+        .step p {
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+        
+        code {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+        
+        .link-box {
+            background: rgba(74, 222, 128, 0.2);
+            border: 2px solid #4ade80;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 30px;
+            text-align: center;
+        }
+        
+        .link-box a {
+            color: #4ade80;
+            font-size: 1.2em;
+        }
+        
+        .demo-link {
+            display: inline-block;
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+        
+        .demo-link:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(74, 222, 128, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Azure Speech Translation Setup</h1>
+        
+        <div class="error-box">
+            <h2>⚠️ Error 401: Authentication Failed</h2>
+            <p>You're seeing this error because the Azure Speech Service credentials haven't been configured yet. Follow the steps below to fix this.</p>
+        </div>
+        
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h3>Get Azure Speech Service Credentials</h3>
+                <p>You need an Azure account with Speech Service enabled. If you don't have one:</p>
+                <ol style="margin-left: 20px; margin-top: 10px;">
+                    <li>Go to <a href="https://azure.microsoft.com/free/" target="_blank" style="color: #4ade80;">Azure Free Account</a></li>
+                    <li>Create a Speech Service resource in the Azure Portal</li>
+                    <li>Copy your subscription key and region</li>
+                </ol>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">2</div>
+                <h3>Configure Environment Variables</h3>
+                <p>Edit the <code>.env</code> file in the project root:</p>
+                <div class="code-block">
+# Replace with your actual credentials
+SPEECH_KEY=your-actual-speech-key-here
+SPEECH_REGION=eastus  # or your region
+
+# Optional: For translation API
+TRANSLATOR_KEY=your-translator-key-here
+TRANSLATOR_REGION=eastus
+                </div>
+                <p style="margin-top: 10px;">Common regions: <code>eastus</code>, <code>westus</code>, <code>westeurope</code>, <code>eastasia</code></p>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">3</div>
+                <h3>Restart the Server</h3>
+                <p>After updating the .env file, restart the server:</p>
+                <div class="code-block">
+# Stop the server (Ctrl+C)
+# Then restart:
+npm run dev
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">4</div>
+                <h3>Test Your Setup</h3>
+                <p>Once configured, test the API endpoint:</p>
+                <div class="code-block">
+curl http://localhost:3001/api/get-speech-token
+                </div>
+                <p style="margin-top: 10px;">You should receive a JSON response with a token and region.</p>
+            </div>
+        </div>
+        
+        <div class="link-box">
+            <h3>Quick Links</h3>
+            <p><a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices" target="_blank">Create Speech Service in Azure Portal →</a></p>
+            <p><a href="https://docs.microsoft.com/azure/cognitive-services/speech-service/get-started-speech-to-text" target="_blank">Azure Speech Documentation →</a></p>
+            
+            <a href="demo-index.html" class="demo-link">Back to Demos</a>
+        </div>
+    </div>
+</body>
+</html>

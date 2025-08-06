@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Azure Speech Translation Demos - Choose Implementation</title>
+    <meta charset="utf-8" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+        
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        
+        .demo-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            transition: all 0.3s;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .demo-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .demo-card h2 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: #4ade80;
+        }
+        
+        .demo-card p {
+            line-height: 1.6;
+            margin-bottom: 20px;
+            opacity: 0.9;
+        }
+        
+        .latency-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            background: rgba(74, 222, 128, 0.2);
+            border: 1px solid #4ade80;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+        
+        .demo-link {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: all 0.3s;
+            text-align: center;
+            width: 100%;
+        }
+        
+        .demo-link:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(74, 222, 128, 0.4);
+        }
+        
+        .demo-link.optimal {
+            background: linear-gradient(135deg, #00ff88, #00ccff);
+        }
+        
+        .demo-link.webrtc {
+            background: linear-gradient(135deg, #ff0066, #00ffcc);
+        }
+        
+        .demo-link.dashboard {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        }
+        
+        .features {
+            list-style: none;
+            margin: 20px 0;
+        }
+        
+        .features li {
+            padding: 8px 0;
+            position: relative;
+            padding-left: 25px;
+        }
+        
+        .features li:before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #4ade80;
+            font-weight: bold;
+        }
+        
+        .status {
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+        }
+        
+        .status-item {
+            display: inline-block;
+            margin: 0 20px;
+        }
+        
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-dot.active {
+            background: #4ade80;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .recommended {
+            position: relative;
+        }
+        
+        .recommended::before {
+            content: '⭐ RECOMMENDED';
+            position: absolute;
+            top: -10px;
+            right: 20px;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            animation: glow 2s infinite;
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 10px rgba(251, 191, 36, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.8); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Azure Speech Translation Demos</h1>
+            <p class="subtitle">Choose your implementation based on latency requirements</p>
+        </header>
+        
+        <div class="demo-grid">
+            <!-- Current Implementation -->
+            <div class="demo-card">
+                <h2>Current Implementation</h2>
+                <div class="latency-badge">300-800ms latency</div>
+                <p>Three-step pipeline using separate Azure services for STT → Translation → TTS. Good for understanding the basic flow.</p>
+                <ul class="features">
+                    <li>Simple to understand</li>
+                    <li>Each service independent</li>
+                    <li>Easy debugging</li>
+                    <li>Higher cumulative latency</li>
+                </ul>
+                <a href="bilingual-ultra-low-latency.html" class="demo-link">Try Current Implementation</a>
+            </div>
+            
+            <!-- Optimal Azure Implementation -->
+            <div class="demo-card recommended">
+                <h2>Azure Direct Translation</h2>
+                <div class="latency-badge">100-150ms latency</div>
+                <p>Uses Azure's TranslationRecognizer API for direct speech-to-speech translation. Single API call with preserved prosody.</p>
+                <ul class="features">
+                    <li>60-70% latency reduction</li>
+                    <li>Single integrated API</li>
+                    <li>Preserves voice emotion</li>
+                    <li>Multi-language support</li>
+                    <li>True streaming</li>
+                </ul>
+                <a href="optimal-speech-translation.html" class="demo-link optimal">Try Optimal Implementation</a>
+            </div>
+            
+            <!-- WebRTC Ultra-Low Latency -->
+            <div class="demo-card">
+                <h2>WebRTC DataChannel</h2>
+                <div class="latency-badge">30-50ms latency</div>
+                <p>Peer-to-peer connection using WebRTC DataChannels for ultra-low latency. Ideal for gaming and real-time applications.</p>
+                <ul class="features">
+                    <li>Lowest possible latency</li>
+                    <li>Direct P2P connection</li>
+                    <li>Binary streaming</li>
+                    <li>Unreliable mode option</li>
+                    <li>Complex setup required</li>
+                </ul>
+                <a href="webrtc-ultra-low-latency.html" class="demo-link webrtc">Try WebRTC Implementation</a>
+            </div>
+            
+            <!-- Performance Dashboard -->
+            <div class="demo-card">
+                <h2>Performance Dashboard</h2>
+                <div class="latency-badge">Comparison Tool</div>
+                <p>Visual comparison of all implementations with real-time metrics, charts, and recommendations by use case.</p>
+                <ul class="features">
+                    <li>Side-by-side comparison</li>
+                    <li>Performance metrics</li>
+                    <li>Use case recommendations</li>
+                    <li>Interactive charts</li>
+                </ul>
+                <a href="performance-comparison-dashboard.html" class="demo-link dashboard">View Dashboard</a>
+            </div>
+            
+            <!-- Speaker with Auto-Detection -->
+            <div class="demo-card">
+                <h2>🎤 Speaker Broadcaster</h2>
+                <div class="latency-badge">Auto Language Detection</div>
+                <p>Broadcast your speech with automatic language detection. Supports 8+ languages and creates a session for listeners to join.</p>
+                <ul class="features">
+                    <li>Automatic language detection</li>
+                    <li>Multi-language support</li>
+                    <li>Session code generation</li>
+                    <li>Real-time transcript</li>
+                    <li>WebSocket broadcasting</li>
+                </ul>
+                <a href="speaker-auto-detect.html" class="demo-link">Start Broadcasting</a>
+            </div>
+            
+            <!-- Listener Receiver -->
+            <div class="demo-card">
+                <h2>🎧 Listener Receiver</h2>
+                <div class="latency-badge">Real-time Translation</div>
+                <p>Join a speaker's session to receive real-time translations in your preferred language with optional text-to-speech.</p>
+                <ul class="features">
+                    <li>Join by session code</li>
+                    <li>Choose target language</li>
+                    <li>Real-time translation</li>
+                    <li>Optional TTS playback</li>
+                    <li>Show original text</li>
+                </ul>
+                <a href="listener-auto-receive.html" class="demo-link">Join Session</a>
+            </div>
+        </div>
+        
+        <div class="status">
+            <div class="status-item">
+                <span class="status-dot active"></span>
+                <span>Token Server: Active on port 3001</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot active"></span>
+                <span>WebSocket Server: Active on port 3004</span>
+            </div>
+            <div class="status-item">
+                <a href="monitor.html" style="color: #4ade80; text-decoration: none;">
+                    📊 Open System Monitor
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

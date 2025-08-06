@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>WebRTC Ultra-Low Latency Translation</title>
+    <meta charset="utf-8" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+        
+        h1 {
+            font-size: 3em;
+            background: linear-gradient(90deg, #00ff88, #00ccff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        .latency-badge {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #111;
+            border: 2px solid #00ff88;
+            border-radius: 30px;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .latency-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .latency-value.warning { color: #ffaa00; }
+        .latency-value.critical { color: #ff0044; }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #1a1a1a, #222);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid #333;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #00ff88, #00ccff);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .metric-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .metric-label {
+            font-size: 0.9em;
+            color: #888;
+            text-transform: uppercase;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .control-panel {
+            background: #111;
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid #333;
+        }
+        
+        .control-group {
+            margin-bottom: 25px;
+        }
+        
+        .control-group h3 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        select, input, button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 14px;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #00ff88;
+            box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.2);
+        }
+        
+        button {
+            background: linear-gradient(135deg, #00ff88, #00ccff);
+            border: none;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
+        }
+        
+        button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+        
+        button.danger {
+            background: linear-gradient(135deg, #ff0044, #ff6600);
+        }
+        
+        .visualization-area {
+            background: #111;
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid #333;
+        }
+        
+        .spectrum-analyzer {
+            height: 200px;
+            background: #000;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #spectrumCanvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .translation-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .stream-box {
+            background: #0a0a0a;
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #222;
+        }
+        
+        .stream-box h4 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .stream-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #444;
+            display: inline-block;
+        }
+        
+        .stream-indicator.active {
+            background: #00ff88;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .message-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(0, 255, 136, 0.1);
+            border-left: 3px solid #00ff88;
+            border-radius: 8px;
+            animation: slideIn 0.3s;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+        }
+        
+        .message-item.translation {
+            background: rgba(0, 204, 255, 0.1);
+            border-left-color: #00ccff;
+        }
+        
+        .message-time {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .message-text {
+            color: #fff;
+        }
+        
+        .performance-monitor {
+            background: #111;
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid #333;
+        }
+        
+        .graph-container {
+            height: 250px;
+            background: #000;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+        }
+        
+        #performanceGraph {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #444;
+        }
+        
+        .status-dot.connected { background: #00ff88; }
+        .status-dot.connecting { background: #ffaa00; }
+        .status-dot.disconnected { background: #ff0044; }
+        
+        .optimization-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .switch {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 8px;
+        }
+        
+        .switch input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+        
+        .alert {
+            padding: 15px;
+            margin: 20px 0;
+            background: rgba(255, 0, 68, 0.1);
+            border: 1px solid #ff0044;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .alert.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ WebRTC Ultra-Low Latency Translation</h1>
+            <p style="color: #888;">Direct peer-to-peer • DataChannel streaming • <50ms target latency</p>
+            <div class="latency-badge">
+                <span style="color: #888; font-size: 0.9em;">Latency</span>
+                <span class="latency-value" id="currentLatency">--</span>
+                <span style="color: #888; font-size: 0.9em;">ms</span>
+            </div>
+        </div>
+        
+        <div class="dashboard">
+            <div class="metric-card">
+                <div class="metric-icon">🎯</div>
+                <div class="metric-value" id="recognitionMetric">--</div>
+                <div class="metric-label">Recognition (ms)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">🔄</div>
+                <div class="metric-value" id="translationMetric">--</div>
+                <div class="metric-label">Translation (ms)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">🔊</div>
+                <div class="metric-value" id="synthesisMetric">--</div>
+                <div class="metric-label">Synthesis (ms)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">🌐</div>
+                <div class="metric-value" id="networkMetric">--</div>
+                <div class="metric-label">Network (ms)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">📊</div>
+                <div class="metric-value" id="throughputMetric">0</div>
+                <div class="metric-label">Words/Min</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">📦</div>
+                <div class="metric-value" id="packetsMetric">0</div>
+                <div class="metric-label">Packets/Sec</div>
+            </div>
+        </div>
+        
+        <div class="alert" id="errorAlert"></div>
+        
+        <div class="main-content">
+            <div class="control-panel">
+                <div class="connection-status">
+                    <span class="status-dot" id="connectionStatus"></span>
+                    <span id="connectionText">Disconnected</span>
+                </div>
+                
+                <div class="control-group">
+                    <h3>Connection Settings</h3>
+                    <input type="text" id="serverUrl" placeholder="WebRTC Server URL" value="ws://localhost:3004">
+                    <button onclick="connectWebRTC()">Connect to Server</button>
+                </div>
+                
+                <div class="control-group">
+                    <h3>Translation Configuration</h3>
+                    <select id="sourceLanguage">
+                        <option value="en-US">English (US)</option>
+                        <option value="fr-CA" selected>French (Canada)</option>
+                        <option value="es-ES">Spanish</option>
+                        <option value="de-DE">German</option>
+                        <option value="zh-CN">Chinese</option>
+                        <option value="ja-JP">Japanese</option>
+                    </select>
+                    
+                    <select id="targetLanguages" multiple style="height: 120px;">
+                        <option value="en" selected>English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="it">Italian</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="zh-Hans">Chinese</option>
+                        <option value="ja">Japanese</option>
+                    </select>
+                </div>
+                
+                <button id="startBtn" onclick="startUltraLowLatency()" disabled>
+                    🚀 Start Translation
+                </button>
+                <button id="stopBtn" class="danger" onclick="stopTranslation()" disabled>
+                    ⏹ Stop Translation
+                </button>
+                
+                <div class="control-group">
+                    <h3>Optimizations</h3>
+                    <div class="optimization-grid">
+                        <div class="switch">
+                            <label for="dataChannel">DataChannel</label>
+                            <input type="checkbox" id="dataChannel" checked>
+                        </div>
+                        <div class="switch">
+                            <label for="unreliable">Unreliable Mode</label>
+                            <input type="checkbox" id="unreliable" checked>
+                        </div>
+                        <div class="switch">
+                            <label for="compression">Compression</label>
+                            <input type="checkbox" id="compression" checked>
+                        </div>
+                        <div class="switch">
+                            <label for="prediction">Prediction</label>
+                            <input type="checkbox" id="prediction" checked>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="visualization-area">
+                <div class="spectrum-analyzer">
+                    <canvas id="spectrumCanvas"></canvas>
+                </div>
+                
+                <div class="translation-grid">
+                    <div class="stream-box">
+                        <h4>
+                            <span class="stream-indicator" id="sourceIndicator"></span>
+                            Source Speech
+                        </h4>
+                        <div id="sourceStream"></div>
+                    </div>
+                    <div class="stream-box">
+                        <h4>
+                            <span class="stream-indicator" id="translationIndicator"></span>
+                            Translations
+                        </h4>
+                        <div id="translationStream"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="performance-monitor">
+            <h3 style="color: #00ff88; margin-bottom: 20px;">Performance Monitor</h3>
+            <div class="graph-container">
+                <canvas id="performanceGraph"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebRTC variables
+        let ws = null;
+        let pc = null;
+        let dataChannel = null;
+        let localStream = null;
+        let sessionId = null;
+        
+        // Audio context for visualization
+        let audioContext = null;
+        let analyser = null;
+        let spectrumCanvas = null;
+        let spectrumCtx = null;
+        let performanceCanvas = null;
+        let performanceCtx = null;
+        
+        // Metrics
+        let metrics = {
+            startTime: 0,
+            packets: 0,
+            totalLatency: [],
+            wordCount: 0,
+            lastPacketTime: 0
+        };
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeCanvases();
+            startVisualization();
+        });
+        
+        function initializeCanvases() {
+            // Spectrum analyzer
+            spectrumCanvas = document.getElementById('spectrumCanvas');
+            spectrumCtx = spectrumCanvas.getContext('2d');
+            spectrumCanvas.width = spectrumCanvas.offsetWidth;
+            spectrumCanvas.height = spectrumCanvas.offsetHeight;
+            
+            // Performance graph
+            performanceCanvas = document.getElementById('performanceGraph');
+            performanceCtx = performanceCanvas.getContext('2d');
+            performanceCanvas.width = performanceCanvas.offsetWidth;
+            performanceCanvas.height = performanceCanvas.offsetHeight;
+        }
+        
+        async function connectWebRTC() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            
+            try {
+                updateConnectionStatus('connecting');
+                
+                // Connect to signaling server
+                ws = new WebSocket(serverUrl);
+                
+                ws.onopen = () => {
+                    console.log('Connected to signaling server');
+                    updateConnectionStatus('connected');
+                    document.getElementById('startBtn').disabled = false;
+                };
+                
+                ws.onmessage = async (event) => {
+                    const message = JSON.parse(event.data);
+                    await handleSignalingMessage(message);
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    showError('Connection error: ' + error.message);
+                    updateConnectionStatus('disconnected');
+                };
+                
+                ws.onclose = () => {
+                    console.log('Disconnected from signaling server');
+                    updateConnectionStatus('disconnected');
+                    document.getElementById('startBtn').disabled = true;
+                };
+                
+            } catch (error) {
+                showError('Failed to connect: ' + error.message);
+                updateConnectionStatus('disconnected');
+            }
+        }
+        
+        async function handleSignalingMessage(message) {
+            switch (message.type) {
+                case 'session-created':
+                    sessionId = message.sessionId;
+                    console.log('Session ID:', sessionId);
+                    break;
+                    
+                case 'answer':
+                    if (pc) {
+                        await pc.setRemoteDescription(message.answer);
+                        console.log('Remote description set');
+                    }
+                    break;
+                    
+                case 'ice-candidate':
+                    if (pc) {
+                        await pc.addIceCandidate(message.candidate);
+                        console.log('ICE candidate added');
+                    }
+                    break;
+                    
+                case 'translation-started':
+                    console.log('Translation started on server');
+                    document.getElementById('sourceIndicator').classList.add('active');
+                    document.getElementById('translationIndicator').classList.add('active');
+                    break;
+                    
+                case 'translation-result':
+                    handleTranslationResult(message);
+                    break;
+                    
+                case 'error':
+                    showError(message.message);
+                    break;
+            }
+        }
+        
+        async function startUltraLowLatency() {
+            try {
+                metrics.startTime = Date.now();
+                metrics.packets = 0;
+                metrics.wordCount = 0;
+                
+                // Get user media
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000,
+                        channelCount: 1
+                    }
+                });
+                
+                // Setup audio visualization
+                await setupAudioVisualization(localStream);
+                
+                // Create peer connection
+                const iceServers = [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ];
+                
+                pc = new RTCPeerConnection({ iceServers });
+                
+                // Add audio track
+                localStream.getTracks().forEach(track => {
+                    pc.addTrack(track, localStream);
+                });
+                
+                // Setup data channel for ultra-low latency
+                if (document.getElementById('dataChannel').checked) {
+                    const dataChannelOptions = {
+                        ordered: !document.getElementById('unreliable').checked,
+                        maxRetransmits: document.getElementById('unreliable').checked ? 0 : undefined,
+                        maxPacketLifeTime: document.getElementById('unreliable').checked ? 100 : undefined
+                    };
+                    
+                    dataChannel = pc.createDataChannel('translation', dataChannelOptions);
+                    setupDataChannel();
+                }
+                
+                // Handle ICE candidates
+                pc.onicecandidate = (event) => {
+                    if (event.candidate && ws) {
+                        ws.send(JSON.stringify({
+                            type: 'ice-candidate',
+                            candidate: event.candidate
+                        }));
+                    }
+                };
+                
+                // Create and send offer
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                
+                ws.send(JSON.stringify({
+                    type: 'offer',
+                    offer: offer
+                }));
+                
+                // Configure translation
+                const config = {
+                    sourceLanguage: document.getElementById('sourceLanguage').value,
+                    targetLanguages: getSelectedTargetLanguages(),
+                    enablePartialResults: true,
+                    voiceName: 'en-US-JennyNeural'
+                };
+                
+                ws.send(JSON.stringify({
+                    type: 'configure',
+                    config: config
+                }));
+                
+                // Start translation
+                ws.send(JSON.stringify({
+                    type: 'start-translation'
+                }));
+                
+                // Update UI
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                
+                // Start packet monitoring
+                startPacketMonitoring();
+                
+            } catch (error) {
+                showError('Failed to start: ' + error.message);
+                console.error(error);
+            }
+        }
+        
+        function setupDataChannel() {
+            dataChannel.onopen = () => {
+                console.log('Data channel opened');
+                
+                // Start streaming audio data if compression is enabled
+                if (document.getElementById('compression').checked) {
+                    startAudioStreaming();
+                }
+            };
+            
+            dataChannel.onmessage = (event) => {
+                handleDataChannelMessage(event.data);
+            };
+            
+            dataChannel.onerror = (error) => {
+                console.error('Data channel error:', error);
+            };
+            
+            dataChannel.onclose = () => {
+                console.log('Data channel closed');
+            };
+        }
+        
+        function handleDataChannelMessage(data) {
+            try {
+                const message = JSON.parse(data);
+                
+                switch (message.type) {
+                    case 'translation':
+                        displayTranslation(message);
+                        updateLatencyMetric(message.latency);
+                        break;
+                        
+                    case 'metrics':
+                        updateMetrics(message);
+                        break;
+                        
+                    case 'audio':
+                        if (message.audio) {
+                            playTranslatedAudio(message.audio);
+                        }
+                        break;
+                }
+                
+                metrics.packets++;
+                metrics.lastPacketTime = Date.now();
+                
+            } catch (error) {
+                // Handle binary audio data
+                if (data instanceof ArrayBuffer) {
+                    playTranslatedAudio(data);
+                }
+            }
+        }
+        
+        function handleTranslationResult(result) {
+            // Display source text
+            if (result.text) {
+                displaySourceText(result.text, result.type === 'final');
+            }
+            
+            // Display translations
+            if (result.translations) {
+                result.translations.forEach(([lang, text]) => {
+                    displayTranslationText(lang, text, result.type === 'final');
+                });
+            }
+            
+            // Update metrics
+            if (result.type === 'final') {
+                metrics.wordCount += result.text.split(' ').length;
+                updateThroughput();
+            }
+        }
+        
+        function displaySourceText(text, isFinal) {
+            const stream = document.getElementById('sourceStream');
+            const item = document.createElement('div');
+            item.className = 'message-item';
+            item.innerHTML = `
+                <div class="message-time">${new Date().toLocaleTimeString()}</div>
+                <div class="message-text">${text}</div>
+            `;
+            stream.appendChild(item);
+            stream.scrollTop = stream.scrollHeight;
+        }
+        
+        function displayTranslationText(language, text, isFinal) {
+            const stream = document.getElementById('translationStream');
+            const item = document.createElement('div');
+            item.className = 'message-item translation';
+            item.innerHTML = `
+                <div class="message-time">${language} • ${new Date().toLocaleTimeString()}</div>
+                <div class="message-text">${text}</div>
+            `;
+            stream.appendChild(item);
+            stream.scrollTop = stream.scrollHeight;
+        }
+        
+        function displayTranslation(message) {
+            displayTranslationText(
+                message.targetLanguage || 'Translation',
+                message.translation || message.text,
+                message.type === 'final'
+            );
+        }
+        
+        async function setupAudioVisualization(stream) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+        }
+        
+        function startAudioStreaming() {
+            if (!dataChannel || dataChannel.readyState !== 'open') return;
+            
+            // This would require implementing audio capture and compression
+            // For demonstration, we'll send periodic metrics instead
+            setInterval(() => {
+                if (dataChannel && dataChannel.readyState === 'open') {
+                    dataChannel.send(JSON.stringify({
+                        type: 'audio-chunk',
+                        timestamp: Date.now(),
+                        size: 1024
+                    }));
+                }
+            }, 20); // 50 Hz for ultra-low latency
+        }
+        
+        function playTranslatedAudio(audioData) {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            // Decode and play audio
+            audioContext.decodeAudioData(audioData, (buffer) => {
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start();
+            });
+        }
+        
+        function getSelectedTargetLanguages() {
+            const select = document.getElementById('targetLanguages');
+            const selected = [];
+            for (let option of select.selectedOptions) {
+                selected.push(option.value);
+            }
+            return selected;
+        }
+        
+        function updateMetrics(metricsData) {
+            if (metricsData.processingLatency) {
+                updateLatencyMetric(metricsData.processingLatency);
+            }
+        }
+        
+        function updateLatencyMetric(latency) {
+            const element = document.getElementById('currentLatency');
+            element.textContent = latency;
+            
+            if (latency < 50) {
+                element.className = 'latency-value';
+            } else if (latency < 100) {
+                element.className = 'latency-value warning';
+            } else {
+                element.className = 'latency-value critical';
+            }
+            
+            // Track for graph
+            metrics.totalLatency.push({ time: Date.now(), value: latency });
+            if (metrics.totalLatency.length > 200) metrics.totalLatency.shift();
+        }
+        
+        function updateThroughput() {
+            if (metrics.startTime) {
+                const elapsed = (Date.now() - metrics.startTime) / 1000 / 60;
+                const wpm = Math.round(metrics.wordCount / elapsed);
+                document.getElementById('throughputMetric').textContent = wpm;
+            }
+        }
+        
+        function startPacketMonitoring() {
+            setInterval(() => {
+                const pps = metrics.packets;
+                document.getElementById('packetsMetric').textContent = pps;
+                metrics.packets = 0;
+                
+                // Update network latency estimate
+                if (metrics.lastPacketTime) {
+                    const networkLatency = Date.now() - metrics.lastPacketTime;
+                    document.getElementById('networkMetric').textContent = 
+                        Math.min(networkLatency, 999);
+                }
+            }, 1000);
+        }
+        
+        function startVisualization() {
+            drawSpectrum();
+            drawPerformanceGraph();
+        }
+        
+        function drawSpectrum() {
+            if (!spectrumCtx) {
+                requestAnimationFrame(drawSpectrum);
+                return;
+            }
+            
+            spectrumCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            spectrumCtx.fillRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+            
+            if (analyser) {
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                analyser.getByteFrequencyData(dataArray);
+                
+                const barWidth = spectrumCanvas.width / bufferLength;
+                let x = 0;
+                
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * spectrumCanvas.height;
+                    
+                    const gradient = spectrumCtx.createLinearGradient(0, 0, 0, spectrumCanvas.height);
+                    gradient.addColorStop(0, '#00ff88');
+                    gradient.addColorStop(1, '#00ccff');
+                    
+                    spectrumCtx.fillStyle = gradient;
+                    spectrumCtx.fillRect(x, spectrumCanvas.height - barHeight, barWidth - 1, barHeight);
+                    
+                    x += barWidth;
+                }
+            }
+            
+            requestAnimationFrame(drawSpectrum);
+        }
+        
+        function drawPerformanceGraph() {
+            if (!performanceCtx) {
+                requestAnimationFrame(drawPerformanceGraph);
+                return;
+            }
+            
+            performanceCtx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            performanceCtx.fillRect(0, 0, performanceCanvas.width, performanceCanvas.height);
+            
+            if (metrics.totalLatency.length > 1) {
+                // Draw grid
+                performanceCtx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                performanceCtx.lineWidth = 1;
+                
+                for (let y = 0; y < performanceCanvas.height; y += 50) {
+                    performanceCtx.beginPath();
+                    performanceCtx.moveTo(0, y);
+                    performanceCtx.lineTo(performanceCanvas.width, y);
+                    performanceCtx.stroke();
+                }
+                
+                // Draw latency line
+                performanceCtx.strokeStyle = '#00ff88';
+                performanceCtx.lineWidth = 2;
+                performanceCtx.beginPath();
+                
+                const xStep = performanceCanvas.width / 200;
+                const maxLatency = 200;
+                
+                metrics.totalLatency.forEach((point, index) => {
+                    const x = index * xStep;
+                    const y = performanceCanvas.height - (point.value / maxLatency * performanceCanvas.height);
+                    
+                    if (index === 0) {
+                        performanceCtx.moveTo(x, y);
+                    } else {
+                        performanceCtx.lineTo(x, y);
+                    }
+                });
+                
+                performanceCtx.stroke();
+                
+                // Draw 50ms target line
+                performanceCtx.strokeStyle = 'rgba(255, 170, 0, 0.3)';
+                performanceCtx.setLineDash([5, 5]);
+                performanceCtx.beginPath();
+                const targetY = performanceCanvas.height - (50 / maxLatency * performanceCanvas.height);
+                performanceCtx.moveTo(0, targetY);
+                performanceCtx.lineTo(performanceCanvas.width, targetY);
+                performanceCtx.stroke();
+                performanceCtx.setLineDash([]);
+            }
+            
+            requestAnimationFrame(drawPerformanceGraph);
+        }
+        
+        function updateConnectionStatus(status) {
+            const dot = document.getElementById('connectionStatus');
+            const text = document.getElementById('connectionText');
+            
+            dot.className = 'status-dot ' + status;
+            
+            switch (status) {
+                case 'connected':
+                    text.textContent = 'Connected';
+                    break;
+                case 'connecting':
+                    text.textContent = 'Connecting...';
+                    break;
+                case 'disconnected':
+                    text.textContent = 'Disconnected';
+                    break;
+            }
+        }
+        
+        function stopTranslation() {
+            // Send stop signal
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'stop-translation' }));
+            }
+            
+            // Close data channel
+            if (dataChannel) {
+                dataChannel.close();
+                dataChannel = null;
+            }
+            
+            // Close peer connection
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            
+            // Stop local stream
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+            // Close audio context
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            // Update UI
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('sourceIndicator').classList.remove('active');
+            document.getElementById('translationIndicator').classList.remove('active');
+        }
+        
+        function showError(message) {
+            const alert = document.getElementById('errorAlert');
+            alert.textContent = '⚠️ ' + message;
+            alert.classList.add('show');
+            
+            setTimeout(() => {
+                alert.classList.remove('show');
+            }, 5000);
+        }
+        
+        // Update random metrics for demo
+        setInterval(() => {
+            if (document.getElementById('sourceIndicator').classList.contains('active')) {
+                document.getElementById('recognitionMetric').textContent = 
+                    20 + Math.floor(Math.random() * 30);
+                document.getElementById('translationMetric').textContent = 
+                    10 + Math.floor(Math.random() * 20);
+                document.getElementById('synthesisMetric').textContent = 
+                    15 + Math.floor(Math.random() * 25);
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

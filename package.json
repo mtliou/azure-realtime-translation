@@ -8,17 +8,20 @@
     "axios": "^1.7.7",
     "bootstrap": "^4.5.3",
     "microsoft-cognitiveservices-speech-sdk": "^1.41",
+    "puppeteer": "^24.15.0",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "universal-cookie": "^4.0.4",
-    "web-vitals": "^0.2.4"
+    "web-vitals": "^0.2.4",
+    "ws": "^8.14.2"
   },
   "scripts": {
     "server": "node server/index.js",
     "server:watch": "node-env-run server --exec nodemon | pino-colada",
     "websocket": "node server/websocket-server.js",
+    "webrtc": "node server/webrtc-translation-server.js",
     "dev": "npm run server",
-    "dev-all": "run-p server websocket",
+    "dev-all": "run-p server websocket webrtc",
     "test": "node test-translation-streaming.js",
     "test:translation": "node test-translation-streaming.js",
     "start": "./start.sh"
@@ -54,5 +57,13 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mtliou/azure-speech-translation-demos.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mtliou/azure-speech-translation-demos/issues"
+  },
+  "homepage": "https://github.com/mtliou/azure-speech-translation-demos#readme"
 }
