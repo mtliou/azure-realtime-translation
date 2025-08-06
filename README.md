@@ -2,6 +2,11 @@
 
 A professional real-time speech translation system that enables seamless communication across language barriers using Azure Cognitive Services.
 
+## 📚 Quick Setup Guides
+
+- **[QUICK_START.md](QUICK_START.md)** - Get speaker/listener pages running in 2 minutes! ⚡
+- **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Comprehensive setup with troubleshooting 🔧
+
 ## Features
 
 - 🎙️ **Real-time speech recognition** with automatic language detection (French Canadian & English)
